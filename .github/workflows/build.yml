@@ -1,0 +1,56 @@
+name: Build and Release Chess Game
+
+on:
+  [push, workflow_dispatch]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Game
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install setuptools
+
+      - name: Build application
+        run: |
+          python setup.py build_apps
+
+      - name: Archive Windows build
+        run: |
+          cd build/win_amd64
+          zip -r ../../Chess-Windows.zip .
+
+      - name: Archive Linux build
+        run: |
+          cd build/manylinux2014_x86_64
+          zip -r ../../Chess-Linux.zip .
+
+      - name: Archive macOS build
+        run: |
+          cd build/macosx_10_13_x86_64
+          zip -r ../../Chess-macOS.zip .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Chess Release v1.0.${{ github.run_number }}
+          files: |
+            Chess-Windows.zip
+            Chess-Linux.zip
+            Chess-macOS.zip
