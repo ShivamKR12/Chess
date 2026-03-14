@@ -1,7 +1,7 @@
 # Chess
 
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/ShivamKR12/Chess)
-![Actions Status](https://github.com/ShivamKR12/Chess/actions/badge.svg)
+![Actions Status](https://github.com/ShivamKR12/Chess/actions/workflows/build.yml/badge.svg)
 
 A 3D chess game built with Panda3D, featuring interactive gameplay with mouse controls, piece movement validation, and visual effects.
 
