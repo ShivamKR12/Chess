@@ -118,8 +118,9 @@ class Chess(ShowBase):
         Initializes the Panda3D application, sets up the 3D scene,
         creates the chessboard, places pieces, and configures input handling.
         """
-        ShowBase.__init__(self)
+
         # Call the parent ShowBase constructor to initialize Panda3D.
+        ShowBase.__init__(self)
 
         # Create a WindowProperties object to configure window settings
         props = WindowProperties()
@@ -130,66 +131,66 @@ class Chess(ShowBase):
         # Apply the window properties to the window
         base.win.requestProperties(props)
 
-        self.disableMouse()
         # Disable Panda3D's default mouse camera controls.
+        self.disableMouse()
 
+        # Create a pivot node for camera rotation during turn changes.
         self.camPivot = render.attachNewNode("camPivot")
         self.camPivot.setPos(0, 0, 0)
-        # Create a pivot node for camera rotation during turn changes.
 
+        # Position the camera above and behind the board, looking at the center.
         camera.reparentTo(self.camPivot)
         camera.setPos(0, -12, 8)
         camera.lookAt(0, 0, 0)
-        # Position the camera above and behind the board, looking at the center.
 
-        self.turn = WHITE
         # Start the game with white's turn.
+        self.turn = WHITE
 
-        self.enPassantSquare = None
         # Track the square where en passant capture is possible (or None).
+        self.enPassantSquare = None
 
+        # Track if kings have moved (affects castling rights).
         self.whiteKingMoved = False
         self.blackKingMoved = False
-        # Track if kings have moved (affects castling rights).
 
+        # Track if rooks have moved (affects castling rights).
         self.whiteRookMoved = [False, False]  # [queenside, kingside]
         self.blackRookMoved = [False, False]  # [queenside, kingside]
-        # Track if rooks have moved (affects castling rights).
 
-        self.validMoves = []
         # List of valid destination squares for the currently selected piece.
+        self.validMoves = []
 
+        # Create on-screen text to display whose turn it is.
         self.turnText = OnscreenText(
             text="Turn: WHITE",
             pos=(-1.3, 0.9),  # Position in screen coordinates (-1 to 1)
             scale=0.07,       # Text size
             fg=(1, 1, 1, 1)   # White text color
         )
-        # Create on-screen text to display whose turn it is.
 
-        self.accept('escape', sys.exit)
         # Bind the escape key to exit the program.
+        self.accept('escape', sys.exit)
 
-        self.setupLights()
         # Set up lighting for the 3D scene.
+        self.setupLights()
 
-        self.setupPicking()
         # Configure collision detection for mouse picking.
+        self.setupPicking()
 
-        self.setupBoard()
         # Create the chessboard squares and place initial pieces.
+        self.setupBoard()
 
         self.hiSq = False  # Square currently under mouse (False if none)
         self.dragging = False  # Square of piece being dragged (False if none)
 
-        taskMgr.add(self.mouseTask, "mouseTask")
         # Add a task that runs every frame to handle mouse interaction.
+        taskMgr.add(self.mouseTask, "mouseTask")
 
-        self.accept("mouse1", self.grabPiece)
         # Bind left mouse button press to grab a piece.
+        self.accept("mouse1", self.grabPiece)
 
-        self.accept("mouse1-up", self.releasePiece)
         # Bind left mouse button release to release/drop a piece.
+        self.accept("mouse1-up", self.releasePiece)
 
     def setupBoard(self):
         """
@@ -198,34 +199,35 @@ class Chess(ShowBase):
         Creates 64 square models, colors them in checkerboard pattern,
         and places the starting chess pieces according to standard rules.
         """
-        self.squareRoot = render.attachNewNode("squareRoot")
+        
         # Create a root node to hold all square models.
+        self.squareRoot = render.attachNewNode("squareRoot")
 
         self.squares = [None] * 64  # List of square NodePaths
         self.pieces = [None] * 64   # List of Piece objects (or None)
 
         for i in range(64):
             # Create and position each square
-            sq = loader.loadModel("models/square")
             # Load the square model from disk.
+            sq = loader.loadModel("models/square")
 
-            sq.reparentTo(self.squareRoot)
             # Attach to the square root node.
+            sq.reparentTo(self.squareRoot)
 
-            sq.setPos(SquarePos(i))
             # Position the square in 3D space.
+            sq.setPos(SquarePos(i))
 
-            sq.setColor(SquareColor(i))
             # Color the square black or white.
+            sq.setColor(SquareColor(i))
 
-            sq.find("**/polygon").node().setIntoCollideMask(BitMask32.bit(1))
             # Enable collision detection on the square's geometry.
+            sq.find("**/polygon").node().setIntoCollideMask(BitMask32.bit(1))
 
-            sq.find("**/polygon").node().setTag('square', str(i))
             # Tag the collision node with the square index for identification.
+            sq.find("**/polygon").node().setTag('square', str(i))
 
-            self.squares[i] = sq
             # Store reference to the square.
+            self.squares[i] = sq
 
         # Define the back rank piece order for both sides
         pieceOrder = (Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook)
@@ -254,28 +256,27 @@ class Chess(ShowBase):
         to detect which square the mouse is pointing at.
         """
         self.picker = CollisionTraverser()
-        # Create a collision traverser to perform collision tests.
 
-        self.pq = CollisionHandlerQueue()
         # Create a queue to store collision results.
+        self.pq = CollisionHandlerQueue()
 
-        self.pickerNode = CollisionNode('mouseRay')
         # Create a collision node for the mouse ray.
+        self.pickerNode = CollisionNode('mouseRay')
 
-        self.pickerNP = camera.attachNewNode(self.pickerNode)
         # Attach the collision node to the camera.
+        self.pickerNP = camera.attachNewNode(self.pickerNode)
 
-        self.pickerNode.setFromCollideMask(BitMask32.bit(1))
         # Set the ray to only collide with objects in mask bit 1 (squares).
+        self.pickerNode.setFromCollideMask(BitMask32.bit(1))
 
         # Create the collision ray.
         self.pickerRay = CollisionRay()
 
-        self.pickerNode.addSolid(self.pickerRay)
         # Add the ray to the collision node.
+        self.pickerNode.addSolid(self.pickerRay)
 
-        self.picker.addCollider(self.pickerNP, self.pq)
         # Add the collider to the traverser with the queue handler.
+        self.picker.addCollider(self.pickerNP, self.pq)
 
     def movePiece(self, fr, to):
         """
@@ -293,30 +294,30 @@ class Chess(ShowBase):
 
         if target:
             # If there's a piece at the destination, capture it
-            target.obj.scaleInterval(1.2, 0).start()
             # Animate the captured piece shrinking to nothing.
+            target.obj.scaleInterval(1.2, 0).start()
 
-            target.obj.removeNode()
             # Remove the captured piece from the scene.
+            target.obj.removeNode()
 
         self.pieces[to] = moving  # Move piece to new square
         self.pieces[fr] = None    # Clear old square
 
         moving.square = to  # Update piece's square attribute
 
+        # Animate the piece moving to its new position.
         moveAnim = LerpPosInterval(
             moving.obj,  # The piece's 3D model
             0.25,        # Animation duration in seconds
             SquarePos(to)  # Target position
         )
-        # Animate the piece moving to its new position.
         moveAnim.start()
 
         # Handle en passant capture
         if isinstance(moving, Pawn) and to == self.enPassantSquare:
             # If this is an en passant capture
-            captured = to - 8 if moving.color == WHITE else to + 8
             # Calculate the square of the captured pawn.
+            captured = to - 8 if moving.color == WHITE else to + 8
 
             victim = self.pieces[captured]
             if victim:
@@ -326,8 +327,8 @@ class Chess(ShowBase):
         # Set en passant square for next move
         if isinstance(moving, Pawn) and abs((to // 8) - (fr // 8)) == 2:
             # If pawn moved two squares forward
-            self.enPassantSquare = fr + (8 if moving.color == WHITE else -8)
             # Set en passant target square.
+            self.enPassantSquare = fr + (8 if moving.color == WHITE else -8)
         else:
             self.enPassantSquare = None  # Clear en passant opportunity
 
@@ -343,11 +344,11 @@ class Chess(ShowBase):
                 rookFrom = fr - 4
                 rookTo = fr - 1
 
+            # Move the rook to its castling position (no animation for simplicity)
             rook = self.pieces[rookFrom]
             self.pieces[rookFrom] = None
             self.pieces[rookTo] = rook
             rook.obj.setPos(SquarePos(rookTo))
-            # Move the rook to its castling position (no animation for simplicity)
 
         # Update castling rights when king moves
         if isinstance(moving, King):
@@ -523,15 +524,15 @@ class Chess(ShowBase):
                 self.pieces[i] = piece
                 self.pieces[square] = None
 
-                kingCheck = self.isKingInCheck(piece.color)
                 # Check if this move would leave own king in check
+                kingCheck = self.isKingInCheck(piece.color)
 
                 # Revert the simulation
                 self.pieces[square] = piece
                 self.pieces[i] = captured
 
+                # Move is legal if it doesn't leave king in check
                 if not kingCheck:
-                    # Move is legal if it doesn't leave king in check
                     moves.append(i)
 
         return moves
@@ -548,8 +549,9 @@ class Chess(ShowBase):
         Returns:
         - bool: True if king is in check, False otherwise
         """
-        kingSquare = None
+
         # Find the king's position
+        kingSquare = None
         for i, p in enumerate(self.pieces):
             if isinstance(p, King) and p.color == color:
                 kingSquare = i
@@ -601,35 +603,36 @@ class Chess(ShowBase):
         Returns:
         - Task.cont: Continue the task
         """
+        
+        # Get mouse position in screen coordinates (-1 to 1)
         if self.mouseWatcherNode.hasMouse():
-            # Get mouse position in screen coordinates (-1 to 1)
             mpos = self.mouseWatcherNode.getMouse()
 
             # Update the collision ray from camera through mouse position
             self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
 
+            # If dragging a piece, update its position to follow mouse
             if self.dragging is not False:
-                # If dragging a piece, update its position to follow mouse
                 nearPoint = render.getRelativePoint(camera, self.pickerRay.getOrigin())
                 nearVec = render.getRelativeVector(camera, self.pickerRay.getDirection())
+                # Position piece at Z=0.5 along the mouse ray
                 self.pieces[self.dragging].obj.setPos(
                     PointAtZ(.5, nearPoint, nearVec)
                 )
-                # Position piece at Z=0.5 along the mouse ray
 
-            self.picker.traverse(self.squareRoot)
             # Perform collision detection on the squares
+            self.picker.traverse(self.squareRoot)
 
+            # If collision detected, get the closest one
             if self.pq.getNumEntries() > 0:
-                # If collision detected, get the closest one
                 self.pq.sortEntries()
                 i = int(self.pq.getEntry(0).getIntoNode().getTag('square'))
                 self.hiSq = i  # Square under mouse
             else:
                 self.hiSq = False
 
+        # If not dragging and mouse over a square, highlight it
         if self.dragging is False and self.hiSq is not False:
-            # If not dragging and mouse over a square, highlight it
             self.clearHighlights()
             self.squares[self.hiSq].setColor(HIGHLIGHT)
 
@@ -642,12 +645,13 @@ class Chess(ShowBase):
         If there's a piece under the mouse that belongs to the current player,
         start dragging it and show its valid moves.
         """
+        
+        # If mouse is over a square with a piece
         if self.hiSq is not False and self.pieces[self.hiSq]:
-            # If mouse is over a square with a piece
             piece = self.pieces[self.hiSq]
 
+            # If it's the current player's piece
             if piece.color == self.turn:
-                # If it's the current player's piece
                 self.clearHighlights()
 
                 self.dragging = self.hiSq  # Start dragging this piece
@@ -668,13 +672,14 @@ class Chess(ShowBase):
         if self.dragging is not False:
             piece = self.pieces[self.dragging]
 
+            # If dropped on a valid move square
             if self.hiSq is not False and self.hiSq in self.validMoves:
-                # If dropped on a valid move square
                 self.movePiece(self.dragging, self.hiSq)
 
                 enemy = PIECEBLACK if self.turn == WHITE else WHITE
+                
+                # If the move puts enemy in checkmate
                 if self.isCheckmate(enemy):
-                    # If the move puts enemy in checkmate
                     self.turnText.setText("CHECKMATE!")
 
                 self.switchTurn()  # Switch to other player's turn
@@ -697,14 +702,16 @@ class Chess(ShowBase):
         for m in self.validMoves:
             piece = self.pieces[self.dragging]
 
+            # Square has enemy piece - red for capture
             if self.pieces[m]:
-                # Square has enemy piece - red for capture
                 self.squares[m].setColor((1, 0, 0, 1))
+            
+            # Special case: en passant capture
             elif isinstance(piece, Pawn) and m == self.enPassantSquare:
-                # Special case: en passant capture
                 self.squares[m].setColor((1, 0, 0, 1))
+            
+            # Empty square - green for move
             else:
-                # Empty square - green for move
                 self.squares[m].setColor((0, 1, 0, 1))
 
     def clearHighlights(self):
@@ -751,20 +758,20 @@ class Chess(ShowBase):
         Uses ambient light for overall illumination and directional light
         for shadows and depth.
         """
+        # Create ambient light (soft, even lighting from all directions)
         ambient = AmbientLight("ambient")
         ambient.setColor((.8, .8, .8, 1))
-        # Create ambient light (soft, even lighting from all directions)
 
+        # Create directional light (like sunlight from a specific direction)
         directional = DirectionalLight("dir")
         directional.setDirection(LVector3(0, 45, -45))
         directional.setColor((0.2, 0.2, 0.2, 1))
-        # Create directional light (like sunlight from a specific direction)
 
-        render.setLight(render.attachNewNode(ambient))
         # Add ambient light to the scene
+        render.setLight(render.attachNewNode(ambient))
 
-        render.setLight(render.attachNewNode(directional))
         # Add directional light to the scene
+        render.setLight(render.attachNewNode(directional))
 
 
 class Piece:
@@ -786,17 +793,17 @@ class Piece:
         self.square = square  # Current square
         self.color = color    # Piece color
 
-        self.obj = loader.loadModel(self.model)
         # Load the 3D model for this piece type
+        self.obj = loader.loadModel(self.model)
 
-        self.obj.reparentTo(render)
         # Add to the 3D scene
+        self.obj.reparentTo(render)
 
-        self.obj.setColor(color)
         # Color the piece
+        self.obj.setColor(color)
 
-        self.obj.setPos(SquarePos(square))
         # Position at the correct square
+        self.obj.setPos(SquarePos(square))
 
 
 # Define piece subclasses with their model files
@@ -820,8 +827,9 @@ class Rook(Piece):
 
 
 # Create and run the chess game
-demo = Chess()
-# Instantiate the Chess class (starts Panda3D and sets up the game)
 
-demo.run()
+# Instantiate the Chess class (starts Panda3D and sets up the game)
+demo = Chess()
+
 # Start the Panda3D main loop (handles rendering, input, and updates)
+demo.run()
