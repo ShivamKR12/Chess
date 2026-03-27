@@ -168,6 +168,14 @@ class Chess(ShowBase):
             fg=(1, 1, 1, 1)   # White text color
         )
 
+        # Load sound effects for game actions
+        self.captureSound = loader.loadSfx("sounds/capture.mp3")
+        self.castleSound = loader.loadSfx("sounds/castle.mp3")
+        self.moveCheckSound = loader.loadSfx("sounds/move-check.mp3")
+        self.moveSelfSound = loader.loadSfx("sounds/move-self.mp3")
+        self.notifySound = loader.loadSfx("sounds/notify.mp3")
+        self.promoteSound = loader.loadSfx("sounds/promote.mp3")
+
         # Bind the escape key to exit the program.
         self.accept('escape', sys.exit)
 
@@ -305,13 +313,8 @@ class Chess(ShowBase):
 
         moving.square = to  # Update piece's square attribute
 
-        # Animate the piece moving to its new position.
-        moveAnim = LerpPosInterval(
-            moving.obj,  # The piece's 3D model
-            0.25,        # Animation duration in seconds
-            SquarePos(to)  # Target position
-        )
-        moveAnim.start()
+        # Move the piece directly to its new position.
+        moving.obj.setPos(SquarePos(to))
 
         # Handle en passant capture
         if isinstance(moving, Pawn) and to == self.enPassantSquare:
@@ -372,6 +375,27 @@ class Chess(ShowBase):
                 # If pawn reached the opposite end of the board
                 piece.obj.removeNode()  # Remove the pawn
                 self.pieces[to] = Queen(to, piece.color)  # Replace with queen
+
+        # Determine move type for sound effects
+        isCapture = target is not None or (isinstance(moving, Pawn) and to == self.enPassantSquare)
+        isCastle = isinstance(moving, King) and abs((to % 8) - (fr % 8)) == 2
+        isPromotion = isinstance(moving, Pawn) and ((moving.color == WHITE and to // 8 == 7) or (moving.color == PIECEBLACK and to // 8 == 0))
+
+        # Check if move puts opponent in check
+        enemy = PIECEBLACK if moving.color == WHITE else WHITE
+        inCheck = self.isKingInCheck(enemy)
+
+        # Play appropriate sound effect
+        if isPromotion:
+            self.promoteSound.play()
+        elif isCastle:
+            self.castleSound.play()
+        elif isCapture:
+            self.captureSound.play()
+        elif inCheck:
+            self.moveCheckSound.play()
+        else:
+            self.moveSelfSound.play()
 
     def isPathClear(self, fr, to):
         """
@@ -681,6 +705,7 @@ class Chess(ShowBase):
                 # If the move puts enemy in checkmate
                 if self.isCheckmate(enemy):
                     self.turnText.setText("CHECKMATE!")
+                    self.notifySound.play()
 
                 self.switchTurn()  # Switch to other player's turn
 
