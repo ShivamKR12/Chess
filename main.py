@@ -176,12 +176,12 @@ class Chess(ShowBase):
         self.turnText.hide()  # We're using statusLabel for consolidated status display
 
         # Load game sound effects
-        self.captureSound = loader.loadSfx("sounds/capture.mp3")
-        self.castleSound = loader.loadSfx("sounds/castle.mp3")
-        self.moveCheckSound = loader.loadSfx("sounds/move-check.mp3")
-        self.moveSelfSound = loader.loadSfx("sounds/move-self.mp3")
-        self.notifySound = loader.loadSfx("sounds/notify.mp3")
-        self.promoteSound = loader.loadSfx("sounds/promote.mp3")
+        self.captureSound = loader.loadSfx("sounds/capture.mp3") # type: ignore
+        self.castleSound = loader.loadSfx("sounds/castle.mp3") # type: ignore
+        self.moveCheckSound = loader.loadSfx("sounds/move-check.mp3") # type: ignore
+        self.moveSelfSound = loader.loadSfx("sounds/move-self.mp3") # type: ignore
+        self.notifySound = loader.loadSfx("sounds/notify.mp3") # type: ignore
+        self.promoteSound = loader.loadSfx("sounds/promote.mp3") # type: ignore
 
         # Bind the escape key to exit the program.
         self.accept('escape', sys.exit)
