@@ -11,19 +11,20 @@ from direct.showbase.ShowBase import ShowBase
 # Import all core Panda3D modules.
 # This includes essential classes like NodePath, Vec3, CollisionRay, BitMask32, etc.
 # Used for 3D graphics, collision detection, and scene management.
-from panda3d.core import *
+from panda3d.core import (
+    LPoint3, LVector3, BitMask32, CollisionNode, CollisionRay,
+    CollisionHandlerQueue, WindowProperties, AmbientLight, DirectionalLight,
+    CollisionTraverser, TextNode
+)
 
 # Import interval functions for creating animations.
 # Includes functions like Sequence, Parallel for combining animations.
-from direct.interval.IntervalGlobal import *
+from direct.interval.IntervalGlobal import LerpHprInterval
 
 # Import OnscreenText for displaying text overlays on the screen.
 # Used to show game information like whose turn it is.
 from direct.gui.OnscreenText import OnscreenText
-
-# Import specific interval classes for smooth position and rotation animations.
-# LerpPosInterval for moving objects, LerpPosHprInterval for moving and rotating.
-from direct.interval.LerpInterval import LerpPosInterval, LerpPosHprInterval
+from direct.gui.DirectGui import DirectFrame, DirectLabel, DirectButton
 
 # Import Task for managing game loops and periodic updates.
 # Used for the mouse task that runs every frame.
@@ -129,19 +130,22 @@ class Chess(ShowBase):
         # Set the window icon filename
         props.setIconFilename("panda3d-logo.ico")
         # Apply the window properties to the window
-        base.win.requestProperties(props)
+        base.win.requestProperties(props) # type: ignore
+
+        # Set a nicer light sky background color
+        self.setBackgroundColor(0.53, 0.81, 0.92, 1)
 
         # Disable Panda3D's default mouse camera controls.
         self.disableMouse()
 
         # Create a pivot node for camera rotation during turn changes.
-        self.camPivot = render.attachNewNode("camPivot")
+        self.camPivot = render.attachNewNode("camPivot") # type: ignore
         self.camPivot.setPos(0, 0, 0)
 
         # Position the camera above and behind the board, looking at the center.
-        camera.reparentTo(self.camPivot)
-        camera.setPos(0, -12, 8)
-        camera.lookAt(0, 0, 0)
+        camera.reparentTo(self.camPivot) # type: ignore
+        camera.setPos(0, -12, 8) # type: ignore
+        camera.lookAt(0, 0, 0) # type: ignore
 
         # Start the game with white's turn.
         self.turn = WHITE
@@ -164,11 +168,14 @@ class Chess(ShowBase):
         self.turnText = OnscreenText(
             text="Turn: WHITE",
             pos=(-1.3, 0.9),  # Position in screen coordinates (-1 to 1)
-            scale=0.07,       # Text size
-            fg=(1, 1, 1, 1)   # White text color
+            scale=0.06,       # Text size
+            fg=(1, 1, 1, 1),  # White text color
+            shadow=(0, 0, 0, 0.8),
+            mayChange=1
         )
+        self.turnText.hide()  # We're using statusLabel for consolidated status display
 
-        # Load sound effects for game actions
+        # Load game sound effects
         self.captureSound = loader.loadSfx("sounds/capture.mp3")
         self.castleSound = loader.loadSfx("sounds/castle.mp3")
         self.moveCheckSound = loader.loadSfx("sounds/move-check.mp3")
@@ -188,14 +195,19 @@ class Chess(ShowBase):
         # Create the chessboard squares and place initial pieces.
         self.setupBoard()
 
+        # Build UI elements for status and controls.
+        self.gameOver = False
+        self.setupUI()
+
         self.hiSq = False  # Square currently under mouse (False if none)
         self.dragging = False  # Square of piece being dragged (False if none)
 
         # Add a task that runs every frame to handle mouse interaction.
-        taskMgr.add(self.mouseTask, "mouseTask")
+        taskMgr.add(self.mouseTask, "mouseTask") # type: ignore
 
         # Bind left mouse button press to grab a piece.
         self.accept("mouse1", self.grabPiece)
+        self.accept("r", self.onNewGame)
 
         # Bind left mouse button release to release/drop a piece.
         self.accept("mouse1-up", self.releasePiece)
@@ -209,7 +221,7 @@ class Chess(ShowBase):
         """
         
         # Create a root node to hold all square models.
-        self.squareRoot = render.attachNewNode("squareRoot")
+        self.squareRoot = render.attachNewNode("squareRoot") # type: ignore
 
         self.squares = [None] * 64  # List of square NodePaths
         self.pieces = [None] * 64   # List of Piece objects (or None)
@@ -217,7 +229,7 @@ class Chess(ShowBase):
         for i in range(64):
             # Create and position each square
             # Load the square model from disk.
-            sq = loader.loadModel("models/square")
+            sq = loader.loadModel("models/square") # type: ignore
 
             # Attach to the square root node.
             sq.reparentTo(self.squareRoot)
@@ -272,7 +284,7 @@ class Chess(ShowBase):
         self.pickerNode = CollisionNode('mouseRay')
 
         # Attach the collision node to the camera.
-        self.pickerNP = camera.attachNewNode(self.pickerNode)
+        self.pickerNP = camera.attachNewNode(self.pickerNode) # type: ignore
 
         # Set the ray to only collide with objects in mask bit 1 (squares).
         self.pickerNode.setFromCollideMask(BitMask32.bit(1))
@@ -285,6 +297,72 @@ class Chess(ShowBase):
 
         # Add the collider to the traverser with the queue handler.
         self.picker.addCollider(self.pickerNP, self.pq)
+
+    def setupUI(self):
+        """Create on-screen controls and status text using DirectGUI."""
+        self.statusFrame = DirectFrame(
+            frameColor=(0.75, 0.95, 0.75, 0.75),
+            frameSize=(-0.75, 0.75, -0.09, 0.09),
+            pos=(0, 0, 0.93),
+            relief='groove',
+            borderWidth=(0.01, 0.01)
+        )
+        self.statusLabel = DirectLabel(
+            parent=self.statusFrame,
+            text="Turn: WHITE",
+            text_fg=(0.1, 0.2, 0.1, 1),
+            text_scale=0.045,
+            text_align=TextNode.ACenter,
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.02, -0.02),
+            text_wordwrap=20,
+            textMayChange=1,
+            frameColor=(0, 0, 0, 0),
+            pos=(0, 0, 0)
+        )
+        self.restartButton = DirectButton(
+            text="New Game",
+            scale=0.04,
+            pos=(1.1, 0, 0.92),
+            command=self.onNewGame
+        )
+
+    def setStatus(self, text):
+        """Update the status text and keep the main turn text in sync."""
+        if hasattr(self, 'statusLabel'):
+            self.statusLabel['text'] = text
+        if text.startswith("Turn:"):
+            self.turnText.setText(text)
+
+    def onNewGame(self):
+        """Reset the board and gameplay state for a new game."""
+        # Remove old pieces
+        for p in self.pieces:
+            if p and hasattr(p, 'obj'):
+                p.obj.removeNode()
+
+        self.squares = [None] * 64
+        self.pieces = [None] * 64
+        self.squareRoot.removeNode()
+
+        # Reset camera/orientation to initial starting view
+        self.camPivot.setHpr(0, 0, 0)
+        camera.reparentTo(self.camPivot) # type: ignore
+        camera.setPos(0, -12, 8) # type: ignore
+        camera.lookAt(0, 0, 0) # type: ignore
+
+        self.enPassantSquare = None
+        self.whiteKingMoved = False
+        self.blackKingMoved = False
+        self.whiteRookMoved = [False, False]
+        self.blackRookMoved = [False, False]
+        self.validMoves = []
+        self.gameOver = False
+        self.turn = WHITE
+
+        self.setupBoard()
+        self.clearHighlights()
+        self.setStatus("Turn: WHITE")
 
     def movePiece(self, fr, to):
         """
@@ -315,6 +393,7 @@ class Chess(ShowBase):
 
         # Move the piece directly to its new position.
         moving.obj.setPos(SquarePos(to))
+        self.lastMove = (fr, to)
 
         # Handle en passant capture
         if isinstance(moving, Pawn) and to == self.enPassantSquare:
@@ -369,23 +448,21 @@ class Chess(ShowBase):
 
         # Handle pawn promotion
         piece = self.pieces[to]  # The piece that just moved
+        isPromotion = False
         if isinstance(piece, Pawn):
             row = to // 8  # Get the row (rank) of the destination
             if (piece.color == WHITE and row == 7) or (piece.color == PIECEBLACK and row == 0):
                 # If pawn reached the opposite end of the board
                 piece.obj.removeNode()  # Remove the pawn
                 self.pieces[to] = Queen(to, piece.color)  # Replace with queen
+                isPromotion = True
 
-        # Determine move type for sound effects
+        # Play sound effect by move type
         isCapture = target is not None or (isinstance(moving, Pawn) and to == self.enPassantSquare)
         isCastle = isinstance(moving, King) and abs((to % 8) - (fr % 8)) == 2
-        isPromotion = isinstance(moving, Pawn) and ((moving.color == WHITE and to // 8 == 7) or (moving.color == PIECEBLACK and to // 8 == 0))
-
-        # Check if move puts opponent in check
         enemy = PIECEBLACK if moving.color == WHITE else WHITE
         inCheck = self.isKingInCheck(enemy)
 
-        # Play appropriate sound effect
         if isPromotion:
             self.promoteSound.play()
         elif isCastle:
@@ -581,6 +658,13 @@ class Chess(ShowBase):
                 kingSquare = i
                 break
 
+        # If there is no king, treat as checkmated for that color (game over scenario)
+        if kingSquare is None:
+            self.checkedKingSquare = None
+            return True
+
+        self.checkedKingSquare = kingSquare
+
         # Check if any enemy piece can move to the king's square
         for i, p in enumerate(self.pieces):
             if p and p.color != color:
@@ -588,6 +672,7 @@ class Chess(ShowBase):
                 if self.isValidMove(i, kingSquare):
                     return True
 
+        self.checkedKingSquare = None
         return False
 
     def isCheckmate(self, color):
@@ -614,6 +699,18 @@ class Chess(ShowBase):
 
         return True  # In check with no legal moves = checkmate
 
+    def isStalemate(self, color):
+        """Check if the specified color is in stalemate (no legal moves, not in check)."""
+        if self.isKingInCheck(color):
+            return False
+
+        for i, p in enumerate(self.pieces):
+            if p and p.color == color:
+                if self.getLegalMoves(i):
+                    return False
+
+        return True
+
     def mouseTask(self, task):
         """
         Task that runs every frame to handle mouse interaction.
@@ -637,8 +734,8 @@ class Chess(ShowBase):
 
             # If dragging a piece, update its position to follow mouse
             if self.dragging is not False:
-                nearPoint = render.getRelativePoint(camera, self.pickerRay.getOrigin())
-                nearVec = render.getRelativeVector(camera, self.pickerRay.getDirection())
+                nearPoint = render.getRelativePoint(camera, self.pickerRay.getOrigin()) # type: ignore
+                nearVec = render.getRelativeVector(camera, self.pickerRay.getDirection()) # type: ignore
                 # Position piece at Z=0.5 along the mouse ray
                 self.pieces[self.dragging].obj.setPos(
                     PointAtZ(.5, nearPoint, nearVec)
@@ -693,25 +790,49 @@ class Chess(ShowBase):
         If the piece is dropped on a valid square, make the move.
         Otherwise, return it to its original position.
         """
-        if self.dragging is not False:
-            piece = self.pieces[self.dragging]
+        if self.dragging is False or self.gameOver:
+            self.dragging = False
+            self.validMoves = []
+            self.hiSq = False
+            self.highlightMoves()
+            return
 
-            # If dropped on a valid move square
-            if self.hiSq is not False and self.hiSq in self.validMoves:
+        piece = self.pieces[self.dragging]
+
+        # If dropped on a valid move square
+        if self.hiSq is not False and self.hiSq in self.validMoves:
+            # Prevent direct king capture (legal move logic should avoid this scenario in real chess).
+            if isinstance(self.pieces[self.hiSq], King):
+                self.setStatus("Illegal move: cannot capture king")
+                piece.obj.setPos(SquarePos(self.dragging))
+            else:
                 self.movePiece(self.dragging, self.hiSq)
 
                 enemy = PIECEBLACK if self.turn == WHITE else WHITE
-                
-                # If the move puts enemy in checkmate
-                if self.isCheckmate(enemy):
-                    self.turnText.setText("CHECKMATE!")
-                    self.notifySound.play()
+                enemy_in_check = self.isKingInCheck(enemy)
+                black_in_checkmate = self.isCheckmate(PIECEBLACK)
+                white_in_checkmate = self.isCheckmate(WHITE)
+                black_stalemate = self.isStalemate(PIECEBLACK)
+                white_stalemate = self.isStalemate(WHITE)
 
-                self.switchTurn()  # Switch to other player's turn
-
+            if black_in_checkmate or white_in_checkmate:
+                self.gameOver = True
+                winner = "WHITE" if black_in_checkmate else "BLACK"
+                self.setStatus(f"CHECKMATE! {winner} wins")
+            elif black_stalemate or white_stalemate:
+                self.gameOver = True
+                self.setStatus("STALEMATE. Draw")
             else:
-                # Invalid drop - return piece to original position
-                piece.obj.setPos(SquarePos(self.dragging))
+                self.switchTurn()
+                if enemy_in_check:
+                    self.setStatus(f"Check to {'BLACK' if enemy == PIECEBLACK else 'WHITE'}")
+                else:
+                    self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+
+        else:
+            # Invalid drop - return piece to original position
+            self.setStatus("Invalid move")
+            piece.obj.setPos(SquarePos(self.dragging))
 
         self.dragging = False  # Stop dragging
         self.validMoves = []   # Clear valid moves
@@ -745,6 +866,10 @@ class Chess(ShowBase):
         """
         for i in range(64):
             self.squares[i].setColor(SquareColor(i))
+
+        # Highlight checked king square
+        if hasattr(self, 'checkedKingSquare') and self.checkedKingSquare is not None:
+            self.squares[self.checkedKingSquare].setColor((1, 0, 0, 1))
 
     def switchTurn(self):
         """
@@ -793,10 +918,10 @@ class Chess(ShowBase):
         directional.setColor((0.2, 0.2, 0.2, 1))
 
         # Add ambient light to the scene
-        render.setLight(render.attachNewNode(ambient))
+        render.setLight(render.attachNewNode(ambient)) # type: ignore
 
         # Add directional light to the scene
-        render.setLight(render.attachNewNode(directional))
+        render.setLight(render.attachNewNode(directional)) # type: ignore
 
 
 class Piece:
@@ -819,10 +944,10 @@ class Piece:
         self.color = color    # Piece color
 
         # Load the 3D model for this piece type
-        self.obj = loader.loadModel(self.model)
+        self.obj = loader.loadModel(self.model) # type: ignore
 
         # Add to the 3D scene
-        self.obj.reparentTo(render)
+        self.obj.reparentTo(render) # type: ignore
 
         # Color the piece
         self.obj.setColor(color)
