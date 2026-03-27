@@ -21,6 +21,15 @@ A 3D chess game built with Panda3D, featuring interactive gameplay with mouse co
 
 ---
 
+## Screenshots
+
+![0](screenshots\0.png)
+![1](screenshots\1.png)
+![2](screenshots\2.png)
+![3](screenshots\3.png)
+
+---
+
 ## Requirements
 
 * Python 3.8 or newer
