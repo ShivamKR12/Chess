@@ -34,12 +34,21 @@ from direct.task.Task import Task
 # Used here for exiting the program with sys.exit.
 import sys
 
+# Import json for game state serialization
+import json
+import os
+from datetime import datetime
+
+# Import tkinter for file dialogs
+from tkinter import filedialog, Tk
+
 # Define color constants used throughout the chess game.
 # Colors are defined as RGBA tuples (red, green, blue, alpha).
 BLACK = (0, 0, 0, 1)  # Solid black for dark squares
 WHITE = (1, 1, 1, 1)  # Solid white for light squares
 HIGHLIGHT = (0, 1, 1, 1)  # Cyan color for highlighting squares
 PIECEBLACK = (.15, .15, .15, 1)  # Dark gray for black chess pieces
+YELLOW = (1, 1, 0, 1)  # Yellow for highlighting selected piece
 
 
 def PointAtZ(z, point, vec):
@@ -442,6 +451,10 @@ class ChessGame(AppState):
         if hasattr(self, 'promotionDialog'):
             self.promotionDialog.cleanup()
             del self.promotionDialog
+        if hasattr(self, 'saveButton'):
+            self.saveButton.destroy()
+        if hasattr(self, 'loadButton'):
+            self.loadButton.destroy()
         
         # Stop tasks
         self.app.taskMgr.remove("mouseTask")
@@ -570,7 +583,7 @@ class ChessGame(AppState):
             text_wordwrap=25,
             textMayChange=1,
             frameColor=(0, 0, 0, 0),
-            pos=(0, 0, 0.02)
+            pos=(0, 0, 0.05)
         )
         
         # New Game button on the left
@@ -584,7 +597,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.3, 0.6, 0.3, 1),
             frameSize=(-0.25, 0.25, -0.04, 0.04),
-            pos=(-0.7, 0, -0.05),
+            pos=(-1.05, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.onNewGame
@@ -601,7 +614,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.6, 0.3, 0.3, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(-0.2, 0, -0.05),
+            pos=(-0.6, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.showResignDialog
@@ -618,10 +631,44 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.5, 0.5, 0.8, 1),
             frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(0.2, 0, -0.05),
+            pos=(-0.25, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.undoMove
+        )
+        
+        # Save button
+        self.saveButton = DirectButton(
+            parent=self.statusFrame,
+            text="Save",
+            text_pos=(0, -0.01),
+            text_scale=0.05,
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0.2, 0.6, 0.8, 1),
+            frameSize=(-0.15, 0.15, -0.04, 0.04),
+            pos=(0.05, 0, -0.09),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
+            command=self.saveGame
+        )
+        
+        # Load button
+        self.loadButton = DirectButton(
+            parent=self.statusFrame,
+            text="Load",
+            text_pos=(0, -0.01),
+            text_scale=0.05,
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0.2, 0.6, 0.8, 1),
+            frameSize=(-0.15, 0.15, -0.04, 0.04),
+            pos=(0.35, 0, -0.09),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
+            command=self.loadGame
         )
         
         # Menu button on the right
@@ -635,7 +682,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.5, 0.5, 0.5, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(0.6, 0, -0.05),
+            pos=(0.7, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.returnToMenu
@@ -670,6 +717,180 @@ class ChessGame(AppState):
             self.statusLabel['text'] = text
         if text.startswith("Turn:"):
             self.turnText.setText(text)
+
+    def saveGame(self):
+        """Save the current game state to a JSON file."""
+        if self.gameOver:
+            self.setStatus("Cannot save - game is over")
+            return
+        
+        # Create saves directory if it doesn't exist
+        saves_dir = "saves"
+        if not os.path.exists(saves_dir):
+            os.makedirs(saves_dir)
+        
+        # Generate default filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = os.path.join(saves_dir, f"chess_save_{timestamp}.json")
+        
+        # Ask user for file location
+        try:
+            root = Tk()
+            root.withdraw()  # Hide the root window
+            filepath = filedialog.asksaveasfilename(
+                initialdir=saves_dir,
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                initialfile=f"chess_save_{timestamp}.json"
+            )
+            root.destroy()
+        except Exception as e:
+            self.setStatus(f"Save error: {str(e)}")
+            return
+        
+        if not filepath:
+            return  # User cancelled
+        
+        # Serialize game state
+        game_state = self._serializeGameState()
+        
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(game_state, f, indent=2)
+            self.setStatus(f"Game saved to {os.path.basename(filepath)}")
+        except Exception as e:
+            self.setStatus(f"Failed to save: {str(e)}")
+
+    def loadGame(self):
+        """Load a saved game state from a JSON file."""
+        # Ask user for file location
+        try:
+            root = Tk()
+            root.withdraw()  # Hide the root window
+            filepath = filedialog.askopenfilename(
+                initialdir="saves",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+            root.destroy()
+        except Exception as e:
+            self.setStatus(f"Load error: {str(e)}")
+            return
+        
+        if not filepath:
+            return  # User cancelled
+        
+        try:
+            with open(filepath, 'r') as f:
+                game_state = json.load(f)
+            self._deserializeGameState(game_state)
+            self.setStatus(f"Game loaded from {os.path.basename(filepath)}")
+        except Exception as e:
+            self.setStatus(f"Failed to load: {str(e)}")
+
+    def _serializeGameState(self):
+        """Serialize the current game state to a JSON-compatible dictionary."""
+        # Serialize piece positions
+        board_state = []
+        for i, piece in enumerate(self.pieces):
+            if piece:
+                piece_data = {
+                    'square': i,
+                    'type': piece.__class__.__name__,
+                    'color': 'WHITE' if piece.color == WHITE else 'BLACK'
+                }
+                board_state.append(piece_data)
+        
+        game_state = {
+            'board': board_state,
+            'turn': 'WHITE' if self.turn == WHITE else 'BLACK',
+            'enPassantSquare': self.enPassantSquare,
+            'whiteKingMoved': self.whiteKingMoved,
+            'blackKingMoved': self.blackKingMoved,
+            'whiteRookMoved': self.whiteRookMoved,
+            'blackRookMoved': self.blackRookMoved,
+            'moveHistory': self._serializeMoveHistory(),
+            'moveNotation': self.moveNotation,
+            'timestamp': datetime.now().isoformat(),
+            'mode': self.mode,
+            'playerColor': self.playerColor,
+            'difficulty': self.difficulty
+        }
+        return game_state
+
+    def _serializeMoveHistory(self):
+        """Serialize move history for saving."""
+        serialized = []
+        for move in self.moveHistory:
+            move_data = {
+                'fr': move['fr'],
+                'to': move['to'],
+                'en_passant_square': move['en_passant_square'],
+                'castling': move['castling'],
+                'promotion': move['promotion'],
+                'white_king_moved': move['white_king_moved'],
+                'black_king_moved': move['black_king_moved'],
+                'white_rooks_moved': move['white_rooks_moved'],
+                'black_rooks_moved': move['black_rooks_moved'],
+                'turn': 'WHITE' if move['turn'] == WHITE else 'BLACK'
+            }
+            if move['castling']:
+                move_data['rook_from'] = move['rook_from']
+                move_data['rook_to'] = move['rook_to']
+            serialized.append(move_data)
+        return serialized
+
+    def _deserializeGameState(self, game_state):
+        """Restore game state from a serialized dictionary."""
+        # Clear current game
+        for p in self.pieces:
+            if p and hasattr(p, 'obj'):
+                p.obj.removeNode()
+        
+        self.pieces = [None] * 64
+        self.squareRoot.removeNode()
+        self.piecesNode.removeNode()
+        self.squareRoot = self.app.render.attachNewNode("squareRoot")
+        self.piecesNode = self.app.render.attachNewNode("piecesNode")
+        
+        # Restore board state
+        piece_classes = {
+            'Pawn': Pawn, 'Knight': Knight, 'Bishop': Bishop,
+            'Rook': Rook, 'Queen': Queen, 'King': King
+        }
+        
+        for piece_data in game_state['board']:
+            square = piece_data['square']
+            piece_type = piece_classes[piece_data['type']]
+            color = WHITE if piece_data['color'] == 'WHITE' else PIECEBLACK
+            self.pieces[square] = piece_type(square, color, parent=self.piecesNode)
+        
+        # Restore game state
+        self.turn = WHITE if game_state['turn'] == 'WHITE' else PIECEBLACK
+        self.enPassantSquare = game_state['enPassantSquare']
+        self.whiteKingMoved = game_state['whiteKingMoved']
+        self.blackKingMoved = game_state['blackKingMoved']
+        self.whiteRookMoved = game_state['whiteRookMoved']
+        self.blackRookMoved = game_state['blackRookMoved']
+        self.moveNotation = game_state['moveNotation']
+        self.gameOver = False
+        
+        # Restore move history (simplified - store basic info only)
+        self.moveHistory = []
+        
+        # Restore board squares
+        for i in range(64):
+            sq = self.app.loader.loadModel("models/square")
+            sq.reparentTo(self.squareRoot)
+            sq.setPos(SquarePos(i))
+            sq.setColor(SquareColor(i))
+            sq.find("**/polygon").node().setIntoCollideMask(BitMask32.bit(1))
+            sq.find("**/polygon").node().setTag('square', str(i))
+            self.squares[i] = sq
+        
+        # Update display
+        self.updateMoveHistoryDisplay()
+        self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+        self.clearHighlights()
 
     def showResignDialog(self):
         """Show a confirmation dialog for resigning the game."""
@@ -1342,7 +1563,7 @@ class ChessGame(AppState):
                 self.validMoves = self.getLegalMoves(self.hiSq)
 
                 # Highlight the selected square in yellow
-                self.squares[self.dragging].setColor((1, 1, 0, 1))
+                self.squares[self.dragging].setColor(YELLOW)
 
                 self.highlightMoves()  # Show valid move destinations
 
