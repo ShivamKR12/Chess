@@ -321,6 +321,11 @@ class ChessGame(AppState):
         self.app.camera.setPos(0, -12, 8) # type: ignore
         self.app.camera.lookAt(0, 0, 0) # type: ignore
 
+        # Set initial camera rotation based on player color
+        # If playing as black, rotate camera 180 degrees to face black side
+        if self.playerColor == 1:  # Playing as black
+            self.camPivot.setH(180)  # Face black side initially
+
         # Start the game with the selected player's color
         self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
 
@@ -567,6 +572,11 @@ class ChessGame(AppState):
 
         # Reset camera/orientation to initial starting view
         self.camPivot.setHpr(0, 0, 0)
+        
+        # Set initial camera rotation based on player color (same as initializeGame)
+        if self.playerColor == 1:  # Playing as black
+            self.camPivot.setH(180)  # Face black side initially
+            
         camera.reparentTo(self.camPivot) # type: ignore
         camera.setPos(0, -12, 8) # type: ignore
         camera.lookAt(0, 0, 0) # type: ignore
