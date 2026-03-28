@@ -156,6 +156,7 @@ class MenuState(AppState):
         self.pvpButton = DirectButton(
             parent=self.menuFrame,
             text="Player vs Player",
+            text_pos=(0, -0.01),
             text_scale=0.06,
             text_fg=(1, 1, 1, 1),
             frameColor=(0.3, 0.6, 0.3, 1),
@@ -169,6 +170,7 @@ class MenuState(AppState):
         self.pvaiButton = DirectButton(
             parent=self.menuFrame,
             text="Player vs AI",
+            text_pos=(0, -0.01),
             text_scale=0.06,
             text_fg=(1, 1, 1, 1),
             frameColor=(0.6, 0.3, 0.3, 1),
@@ -183,6 +185,7 @@ class MenuState(AppState):
         self.whiteButton = DirectButton(
             parent=self.menuFrame,
             text="Play as White",
+            text_pos=(0, -0.01),
             text_scale=0.05,
             text_fg=(0, 0, 0, 1),
             frameColor=(0.9, 0.9, 0.9, 1) if self.selectedColor == 0 else (0.7, 0.7, 0.7, 1),
@@ -196,6 +199,7 @@ class MenuState(AppState):
         self.blackButton = DirectButton(
             parent=self.menuFrame,
             text="Play as Black",
+            text_pos=(0, -0.01),
             text_scale=0.05,
             text_fg=(1, 1, 1, 1),
             frameColor=(0.2, 0.2, 0.2, 1) if self.selectedColor == 1 else (0.4, 0.4, 0.4, 1),
@@ -210,6 +214,7 @@ class MenuState(AppState):
         self.settingsButton = DirectButton(
             parent=self.menuFrame,
             text="Settings",
+            text_pos=(0, -0.01),
             text_scale=0.05,
             text_fg=(1, 1, 1, 1),
             frameColor=(0.5, 0.5, 0.5, 1),
@@ -224,6 +229,7 @@ class MenuState(AppState):
         self.exitButton = DirectButton(
             parent=self.menuFrame,
             text="Exit",
+            text_pos=(0, -0.01),
             text_scale=0.05,
             text_fg=(1, 1, 1, 1),
             frameColor=(0.6, 0.2, 0.2, 1),
@@ -517,38 +523,61 @@ class ChessGame(AppState):
 
     def setupUI(self):
         """Create on-screen controls and status text using DirectGUI."""
+        # Create a larger frame to hold status and buttons
         self.statusFrame = DirectFrame(
-            frameColor=(0.75, 0.95, 0.75, 0.75),
-            frameSize=(-0.75, 0.75, -0.09, 0.09),
-            pos=(0, 0, 0.93),
+            frameColor=(0.2, 0.4, 0.6, 0.9),
+            frameSize=(-1.2, 1.2, -0.15, 0.15),
+            pos=(0, 0, 0.85),
             relief='groove',
-            borderWidth=(0.01, 0.01)
+            borderWidth=(0.02, 0.02)
         )
+        
+        # Status text in the center-top
         self.statusLabel = DirectLabel(
             parent=self.statusFrame,
             text="Turn: WHITE",
-            text_fg=(0.1, 0.2, 0.1, 1),
-            text_scale=0.045,
+            text_fg=(1, 1, 1, 1),
+            text_scale=0.06,
             text_align=TextNode.ACenter,
             text_shadow=(0, 0, 0, 0.8),
             text_shadowOffset=(0.02, -0.02),
-            text_wordwrap=20,
+            text_wordwrap=25,
             textMayChange=1,
             frameColor=(0, 0, 0, 0),
-            pos=(0, 0, 0)
+            pos=(0, 0, 0.02)
         )
+        
+        # New Game button on the left
         self.restartButton = DirectButton(
+            parent=self.statusFrame,
             text="New Game",
-            scale=0.04,
-            pos=(1.1, 0, 0.92),
+            text_pos=(0, -0.01),
+            text_scale=0.05,
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0.3, 0.6, 0.3, 1),
+            frameSize=(-0.25, 0.25, -0.04, 0.04),
+            pos=(-0.4, 0, -0.05),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
             command=self.onNewGame
         )
         
-        # Add back to menu button
+        # Menu button on the right
         self.menuButton = DirectButton(
+            parent=self.statusFrame,
             text="Menu",
-            scale=0.04,
-            pos=(1.1, 0, 0.85),
+            text_pos=(0, -0.01),
+            text_scale=0.05,
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0.5, 0.5, 0.5, 1),
+            frameSize=(-0.2, 0.2, -0.04, 0.04),
+            pos=(0.4, 0, -0.05),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
             command=self.returnToMenu
         )
 
@@ -986,9 +1015,11 @@ class ChessGame(AppState):
                 self.gameOver = True
                 winner = "WHITE" if black_in_checkmate else "BLACK"
                 self.setStatus(f"CHECKMATE! {winner} wins")
+                self.clearHighlights()  # Clear all highlights when game ends
             elif black_stalemate or white_stalemate:
                 self.gameOver = True
                 self.setStatus("STALEMATE. Draw")
+                self.clearHighlights()  # Clear all highlights when game ends
             else:
                 self.switchTurn()
                 if enemy_in_check:
@@ -1032,8 +1063,8 @@ class ChessGame(AppState):
         for i in range(64):
             self.squares[i].setColor(SquareColor(i))
 
-        # Highlight checked king square
-        if hasattr(self, 'checkedKingSquare') and self.checkedKingSquare is not None:
+        # Highlight checked king square (only if game is not over)
+        if hasattr(self, 'checkedKingSquare') and self.checkedKingSquare is not None and not self.gameOver:
             self.squares[self.checkedKingSquare].setColor((1, 0, 0, 1))
 
     def switchTurn(self):
