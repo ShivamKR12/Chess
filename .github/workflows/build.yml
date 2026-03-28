@@ -49,8 +49,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Chess v1.0.${{ github.run_number }}
+          tag_name: v2.0.${{ github.run_number }}
+          name: Chess v2.0.${{ github.run_number }}
           files: |
             Chess-Windows.zip
             Chess-Linux.zip
