@@ -308,6 +308,9 @@ class ChessGame(AppState):
         self.camPivot = self.app.render.attachNewNode("camPivot")
         self.camPivot.setPos(0, 0, 0)
 
+        # Create a node to hold all pieces for easy cleanup
+        self.piecesNode = self.app.render.attachNewNode("piecesNode")
+
         # Position the camera above and behind the board, looking at the center.
         self.app.camera.reparentTo(self.camPivot)
         self.app.camera.setPos(0, -12, 8)
@@ -337,6 +340,9 @@ class ChessGame(AppState):
 
         # Move history for undo functionality
         self.moveHistory = []
+        
+        # Move notation for display
+        self.moveNotation = []
 
         # Create on-screen text to display whose turn it is.
         self.turnText = OnscreenText(
@@ -404,10 +410,8 @@ class ChessGame(AppState):
     def cleanup(self):
         """Clean up game resources."""
         # Remove all pieces
-        if hasattr(self, 'pieces'):
-            for p in self.pieces:
-                if p and hasattr(p, 'obj'):
-                    p.obj.removeNode()
+        if hasattr(self, 'piecesNode'):
+            self.piecesNode.removeNode()
         
         # Remove squares
         if hasattr(self, 'squareRoot'):
@@ -426,6 +430,10 @@ class ChessGame(AppState):
             self.undoButton.destroy()
         if hasattr(self, 'menuButton'):
             self.menuButton.destroy()
+        if hasattr(self, 'moveHistoryFrame'):
+            self.moveHistoryFrame.destroy()
+        if hasattr(self, 'moveHistoryLabel'):
+            self.moveHistoryLabel.destroy()
         if hasattr(self, 'turnText'):
             self.turnText.destroy()
         if hasattr(self, 'resignDialog'):
@@ -460,6 +468,9 @@ class ChessGame(AppState):
         
         # Create a root node to hold all square models.
         self.squareRoot = self.app.render.attachNewNode("squareRoot")
+        
+        # Create a root node to hold all piece models for easy cleanup.
+        self.piecesNode = self.app.render.attachNewNode("piecesNode")
 
         self.squares = [None] * 64  # List of square NodePaths
         self.pieces = [None] * 64   # List of Piece objects (or None)
@@ -492,19 +503,19 @@ class ChessGame(AppState):
 
         # Place white pawns on rank 2 (indices 8-15)
         for i in range(8, 16):
-            self.pieces[i] = Pawn(i, WHITE)
+            self.pieces[i] = Pawn(i, WHITE, parent=self.piecesNode)
 
         # Place black pawns on rank 7 (indices 48-55)
         for i in range(48, 56):
-            self.pieces[i] = Pawn(i, PIECEBLACK)
+            self.pieces[i] = Pawn(i, PIECEBLACK, parent=self.piecesNode)
 
         # Place white pieces on rank 1 (indices 0-7)
         for i in range(8):
-            self.pieces[i] = pieceOrder[i](i, WHITE)
+            self.pieces[i] = pieceOrder[i](i, WHITE, parent=self.piecesNode)
 
         # Place black pieces on rank 8 (indices 56-63)
         for i in range(8):
-            self.pieces[i + 56] = pieceOrder[i](i + 56, PIECEBLACK)
+            self.pieces[i + 56] = pieceOrder[i](i + 56, PIECEBLACK, parent=self.piecesNode)
 
     def setupPicking(self):
         """
@@ -541,7 +552,7 @@ class ChessGame(AppState):
         # Create a larger frame to hold status and buttons
         self.statusFrame = DirectFrame(
             frameColor=(0.2, 0.4, 0.6, 0.9),
-            frameSize=(-1.2, 1.2, -0.15, 0.15),
+            frameSize=(-1.335, 1.335, -0.15, 0.15),
             pos=(0, 0, 0.85),
             relief='groove',
             borderWidth=(0.02, 0.02)
@@ -573,7 +584,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.3, 0.6, 0.3, 1),
             frameSize=(-0.25, 0.25, -0.04, 0.04),
-            pos=(-0.6, 0, -0.05),
+            pos=(-0.7, 0, -0.05),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.onNewGame
@@ -629,6 +640,29 @@ class ChessGame(AppState):
             borderWidth=(0.01, 0.01),
             command=self.returnToMenu
         )
+        
+        # Move history display on the right side
+        self.moveHistoryFrame = DirectFrame(
+            frameColor=(0.2, 0.4, 0.6, 0.9),
+            frameSize=(-0.23, 0.23, -0.85, 0.85),
+            pos=(1.1, 0, -0.15),
+            relief='groove',
+            borderWidth=(0.02, 0.02)
+        )
+        
+        self.moveHistoryLabel = DirectLabel(
+            parent=self.moveHistoryFrame,
+            text="",
+            text_fg=(1, 1, 1, 1),
+            text_scale=0.05,
+            text_align=TextNode.ALeft,
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            text_wordwrap=15,
+            textMayChange=1,
+            frameColor=(0, 0, 0, 0),
+            pos=(-0.2, 0, 0.7)
+        )
 
     def setStatus(self, text):
         """Update the status text and keep the main turn text in sync."""
@@ -678,6 +712,12 @@ class ChessGame(AppState):
         
         # Get the last move
         last_move = self.moveHistory.pop()
+        if self.moveNotation:
+            self.moveNotation.pop()
+        
+        # Remove promoted piece if any
+        if last_move.get('promotion', False):
+            last_move['promoted_piece'].obj.removeNode()
         
         # Restore the board state
         fr = last_move['fr']
@@ -689,26 +729,38 @@ class ChessGame(AppState):
         self.pieces[fr] = moving_piece
         self.pieces[to] = captured_piece
         moving_piece.square = fr
-        moving_piece.obj.setPos(SquarePos(fr))
+        if hasattr(moving_piece, 'obj') and moving_piece.obj:
+            moving_piece.obj.setPos(SquarePos(fr))
+        else:
+            moving_piece.obj = self.app.loader.loadModel(moving_piece.model)
+            moving_piece.obj.reparentTo(self.piecesNode)
+            moving_piece.obj.setColor(moving_piece.color)
+            moving_piece.obj.setPos(SquarePos(fr))
         
         # Restore captured piece if any
         if captured_piece:
-            captured_piece.obj = self.app.loader.loadModel(captured_piece.model)
-            captured_piece.obj.reparentTo(self.app.render)
-            captured_piece.obj.setColor(captured_piece.color)
-            captured_piece.obj.setPos(SquarePos(to))
             captured_piece.square = to
+            if hasattr(captured_piece, 'obj') and captured_piece.obj:
+                captured_piece.obj.setPos(SquarePos(to))
+            else:
+                captured_piece.obj = self.app.loader.loadModel(captured_piece.model)
+                captured_piece.obj.reparentTo(self.piecesNode)
+                captured_piece.obj.setColor(captured_piece.color)
+                captured_piece.obj.setPos(SquarePos(to))
         
         # Handle en passant undo
         if 'en_passant_capture' in last_move:
             captured_sq = last_move['en_passant_capture']
             victim = last_move['en_passant_victim']
             self.pieces[captured_sq] = victim
-            victim.obj = self.app.loader.loadModel(victim.model)
-            victim.obj.reparentTo(self.app.render)
-            victim.obj.setColor(victim.color)
-            victim.obj.setPos(SquarePos(captured_sq))
             victim.square = captured_sq
+            if hasattr(victim, 'obj') and victim.obj:
+                victim.obj.setPos(SquarePos(captured_sq))
+            else:
+                victim.obj = self.app.loader.loadModel(victim.model)
+                victim.obj.reparentTo(self.piecesNode)
+                victim.obj.setColor(victim.color)
+                victim.obj.setPos(SquarePos(captured_sq))
         
         # Handle castling undo
         if last_move['castling']:
@@ -717,7 +769,8 @@ class ChessGame(AppState):
             rook = self.pieces[rook_to]
             self.pieces[rook_from] = rook
             self.pieces[rook_to] = None
-            rook.obj.setPos(SquarePos(rook_from))
+            if hasattr(rook, 'obj') and rook.obj:
+                rook.obj.setPos(SquarePos(rook_from))
             rook.square = rook_from
         
         # Handle promotion undo
@@ -725,13 +778,17 @@ class ChessGame(AppState):
             promoted_piece = last_move['promoted_piece']
             original_pawn = last_move['original_pawn']
             self.pieces[to] = original_pawn
-            original_pawn.obj = self.app.loader.loadModel(original_pawn.model)
-            original_pawn.obj.reparentTo(self.app.render)
-            original_pawn.obj.setColor(original_pawn.color)
-            original_pawn.obj.setPos(SquarePos(to))
             original_pawn.square = to
+            if hasattr(original_pawn, 'obj') and original_pawn.obj:
+                original_pawn.obj.setPos(SquarePos(to))
+            else:
+                original_pawn.obj = self.app.loader.loadModel(original_pawn.model)
+                original_pawn.obj.reparentTo(self.piecesNode)
+                original_pawn.obj.setColor(original_pawn.color)
+                original_pawn.obj.setPos(SquarePos(to))
             # Remove promoted piece
-            promoted_piece.obj.removeNode()
+            if hasattr(promoted_piece, 'obj') and promoted_piece.obj:
+                promoted_piece.obj.removeNode()
         
         # Restore game state
         self.enPassantSquare = last_move['en_passant_square']
@@ -742,11 +799,61 @@ class ChessGame(AppState):
         self.turn = last_move['turn']
         
         # Rotate camera back to match the restored turn
-        self.rotateCamera()
+        self.rotateCamera(instant=True)
         
         # Update status
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
         self.clearHighlights()
+        self.updateMoveHistoryDisplay()
+
+    def squareToAlgebraic(self, square):
+        """Convert square index to algebraic notation (e.g., 0 -> 'a1')."""
+        file = chr(ord('a') + (square % 8))
+        rank = str((square // 8) + 1)
+        return file + rank
+
+    def formatMove(self, move_record):
+        """Format a move record into algebraic notation."""
+        piece = move_record['moving_piece']
+        fr = move_record['fr']
+        to = move_record['to']
+        captured = move_record['captured_piece']
+        
+        if move_record['castling']:
+            if to > fr:
+                return "O-O"
+            else:
+                return "O-O-O"
+        elif move_record['promotion']:
+            piece_type = move_record['promoted_piece'].__class__.__name__[0]
+            if captured:
+                return self.squareToAlgebraic(fr)[0] + "x" + self.squareToAlgebraic(to) + "=" + piece_type
+            else:
+                return self.squareToAlgebraic(to) + "=" + piece_type
+        else:
+            piece_letter = "" if isinstance(piece, Pawn) else piece.__class__.__name__[0]
+            capture_symbol = "x" if captured or (isinstance(piece, Pawn) and to == move_record.get('en_passant_square')) else ""
+            return piece_letter + capture_symbol + self.squareToAlgebraic(to)
+
+    def addMoveToHistory(self, move_record):
+        """Add a formatted move to the history and update display."""
+        notation = self.formatMove(move_record)
+        self.moveNotation.append(notation)
+        self.updateMoveHistoryDisplay()
+
+    def updateMoveHistoryDisplay(self):
+        """Update the move history display with current moves."""
+        # Format as numbered moves: 1. e4 e5  2. Nf3 Nc6 etc.
+        text_lines = []
+        for i in range(0, len(self.moveNotation), 2):
+            move_num = (i // 2) + 1
+            white_move = self.moveNotation[i] if i < len(self.moveNotation) else ""
+            black_move = self.moveNotation[i+1] if i+1 < len(self.moveNotation) else ""
+            text_lines.append(f"{move_num}. {white_move} {black_move}")
+        
+        text = "\n".join(text_lines)
+        if hasattr(self, 'moveHistoryLabel'):
+            self.moveHistoryLabel['text'] = text
 
     def showPromotionDialog(self, square):
         """Show a dialog for pawn promotion choice."""
@@ -775,13 +882,13 @@ class ChessGame(AppState):
         
         # Create the new piece
         if piece_type == "Queen":
-            new_piece = Queen(square, pawn.color)
+            new_piece = Queen(square, pawn.color, parent=self.piecesNode)
         elif piece_type == "Rook":
-            new_piece = Rook(square, pawn.color)
+            new_piece = Rook(square, pawn.color, parent=self.piecesNode)
         elif piece_type == "Bishop":
-            new_piece = Bishop(square, pawn.color)
+            new_piece = Bishop(square, pawn.color, parent=self.piecesNode)
         elif piece_type == "Knight":
-            new_piece = Knight(square, pawn.color)
+            new_piece = Knight(square, pawn.color, parent=self.piecesNode)
         else:
             return
         
@@ -835,6 +942,8 @@ class ChessGame(AppState):
         self.squares = [None] * 64
         self.pieces = [None] * 64
         self.squareRoot.removeNode()
+        self.piecesNode.removeNode()
+        self.piecesNode = self.app.render.attachNewNode("piecesNode")
 
         # Reset camera/orientation to initial starting view
         self.camPivot.setHpr(0, 0, 0)
@@ -854,6 +963,7 @@ class ChessGame(AppState):
         self.blackRookMoved = [False, False]
         self.validMoves = []
         self.moveHistory = []
+        self.moveNotation = []
         self.gameOver = False
         self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
 
@@ -964,6 +1074,7 @@ class ChessGame(AppState):
 
         # Add the move to history
         self.moveHistory.append(move_record)
+        self.addMoveToHistory(move_record)
 
         # Play sound effect by move type
         isCapture = target is not None or (isinstance(moving, Pawn) and to == self.enPassantSquare)
@@ -1343,20 +1454,31 @@ class ChessGame(AppState):
 
         self.rotateCamera()  # Rotate camera to show board from other side
 
-    def rotateCamera(self):
+    def rotateCamera(self, instant=False):
         """
         Animate the camera rotating 180 degrees around the board.
+        
+        Parameters:
+        - instant: If True, rotate instantly without animation
         """
-        startH = self.camPivot.getH()  # Current heading
-        endH = startH - 180            # Rotate 180 degrees (clockwise)
+        if instant:
+            currentH = self.camPivot.getH()
+            self.camPivot.setH(currentH - 180)
+        else:
+            # Finish any ongoing rotation
+            if hasattr(self, 'orbit') and self.orbit.isPlaying():
+                self.orbit.finish()
+            
+            startH = self.camPivot.getH()  # Current heading
+            endH = startH - 180            # Rotate 180 degrees (clockwise)
 
-        orbit = LerpHprInterval(
-            self.camPivot,  # Node to rotate
-            1.2,            # Duration in seconds
-            (endH, 0, 0),   # Target HPR (heading, pitch, roll)
-            blendType="easeInOut"  # Smooth easing
-        )
-        orbit.start()  # Start the animation
+            self.orbit = LerpHprInterval(
+                self.camPivot,  # Node to rotate
+                1.2,            # Duration in seconds
+                (endH, 0, 0),   # Target HPR (heading, pitch, roll)
+                blendType="easeInOut"  # Smooth easing
+            )
+            self.orbit.start()  # Start the animation
 
     def setupLights(self):
         """
@@ -1457,13 +1579,14 @@ class Piece:
     Subclasses define the specific model file to load.
     """
 
-    def __init__(self, square, color):
+    def __init__(self, square, color, parent=None):
         """
         Constructor for Piece.
 
         Parameters:
         - square: Initial square index (0-63)
         - color: Piece color (WHITE or PIECEBLACK)
+        - parent: Parent node to attach the model to (defaults to render)
         """
         self.square = square  # Current square
         self.color = color    # Piece color
@@ -1472,7 +1595,10 @@ class Piece:
         self.obj = loader.loadModel(self.model) # type: ignore
 
         # Add to the 3D scene
-        self.obj.reparentTo(render) # type: ignore
+        if parent:
+            self.obj.reparentTo(parent)
+        else:
+            self.obj.reparentTo(render) # type: ignore
 
         # Color the piece
         self.obj.setColor(color)
