@@ -24,7 +24,7 @@ from direct.interval.IntervalGlobal import LerpHprInterval
 # Import OnscreenText for displaying text overlays on the screen.
 # Used to show game information like whose turn it is.
 from direct.gui.OnscreenText import OnscreenText
-from direct.gui.DirectGui import DirectFrame, DirectLabel, DirectButton
+from direct.gui.DirectGui import DirectFrame, DirectLabel, DirectButton, DirectDialog
 
 # Import Task for managing game loops and periodic updates.
 # Used for the mouse task that runs every frame.
@@ -560,10 +560,27 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.3, 0.6, 0.3, 1),
             frameSize=(-0.25, 0.25, -0.04, 0.04),
-            pos=(-0.4, 0, -0.05),
+            pos=(-0.6, 0, -0.05),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.onNewGame
+        )
+        
+        # Resign button in the middle
+        self.resignButton = DirectButton(
+            parent=self.statusFrame,
+            text="Resign",
+            text_pos=(0, -0.01),
+            text_scale=0.05,
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0.6, 0.3, 0.3, 1),
+            frameSize=(-0.2, 0.2, -0.04, 0.04),
+            pos=(0, 0, -0.05),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
+            command=self.showResignDialog
         )
         
         # Menu button on the right
@@ -577,7 +594,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.5, 0.5, 0.5, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(0.4, 0, -0.05),
+            pos=(0.6, 0, -0.05),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.returnToMenu
@@ -589,6 +606,40 @@ class ChessGame(AppState):
             self.statusLabel['text'] = text
         if text.startswith("Turn:"):
             self.turnText.setText(text)
+
+    def showResignDialog(self):
+        """Show a confirmation dialog for resigning the game."""
+        if self.gameOver:
+            return
+        
+        # Create the resign confirmation dialog
+        self.resignDialog = DirectDialog(
+            dialogName="resignDialog",
+            text="Are you sure you want to resign?",
+            buttonTextList=["Yes", "No"],
+            buttonValueList=[1, 0],
+            command=self.onResignConfirm
+        )
+
+    def onResignConfirm(self, value):
+        """Handle the resign confirmation dialog response."""
+        if value == 1:  # Yes, resign
+            self.resignGame()
+        
+        # Clean up the dialog
+        if hasattr(self, 'resignDialog'):
+            self.resignDialog.cleanup()
+            del self.resignDialog
+
+    def resignGame(self):
+        """End the game with resignation - opponent wins."""
+        if self.gameOver:
+            return
+        
+        self.gameOver = True
+        winner = "BLACK" if self.turn == WHITE else "WHITE"
+        self.setStatus(f"RESIGNATION! {winner} wins")
+        self.clearHighlights()
 
     def onNewGame(self):
         """Reset the board and gameplay state for a new game."""
