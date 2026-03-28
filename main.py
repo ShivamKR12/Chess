@@ -911,8 +911,8 @@ class ChessGame(AppState):
             else:
                 self.hiSq = False
 
-        # If not dragging and mouse over a square, highlight it
-        if self.dragging is False and self.hiSq is not False:
+        # If not dragging and mouse over a square, highlight it (only if game is not over)
+        if self.dragging is False and self.hiSq is not False and not self.gameOver:
             self.clearHighlights()
             self.squares[self.hiSq].setColor(HIGHLIGHT)
 
@@ -922,6 +922,10 @@ class ChessGame(AppState):
         """
         Handle mouse button press - attempt to grab a piece.
         """
+        
+        # Don't allow grabbing pieces if the game is over
+        if self.gameOver:
+            return
         
         # If mouse is over a square with a piece
         if self.hiSq is not False and self.pieces[self.hiSq]:
