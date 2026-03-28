@@ -18,6 +18,9 @@ setup(
                 '**/*.jpg',
                 '**/*.egg',
                 '**/*.egg.pz',
+                '**/*.glb',
+                '**/*.mp3',
+                '**/*.json',
             ],
 
             # Include the OpenGL renderer and OpenAL audio plug-in
