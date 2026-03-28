@@ -23,10 +23,10 @@ A 3D chess game built with Panda3D, featuring interactive gameplay with mouse co
 
 ## Screenshots
 
-![0](screenshots/0.png)
-![1](screenshots/1.png)
-![2](screenshots/2.png)
-![3](screenshots/3.png)
+![0](screenshots/4.png)
+![1](screenshots/5.png)
+![2](screenshots/6.png)
+![3](screenshots/7.png)
 
 ---
 
