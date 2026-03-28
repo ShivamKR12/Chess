@@ -824,20 +824,43 @@ class ChessGame(AppState):
             move_data = {
                 'fr': move['fr'],
                 'to': move['to'],
-                'en_passant_square': move['en_passant_square'],
-                'castling': move['castling'],
-                'promotion': move['promotion'],
-                'white_king_moved': move['white_king_moved'],
-                'black_king_moved': move['black_king_moved'],
-                'white_rooks_moved': move['white_rooks_moved'],
-                'black_rooks_moved': move['black_rooks_moved'],
-                'turn': 'WHITE' if move['turn'] == WHITE else 'BLACK'
+                'en_passant_square': move.get('en_passant_square'),
+                'en_passant_capture': move.get('en_passant_capture'),
+                'castling': move.get('castling', False),
+                'promotion': move.get('promotion', False),
+                'white_king_moved': move.get('white_king_moved', False),
+                'black_king_moved': move.get('black_king_moved', False),
+                'white_rooks_moved': move.get('white_rooks_moved', [False, False]),
+                'black_rooks_moved': move.get('black_rooks_moved', [False, False]),
+                'turn': 'WHITE' if move['turn'] == WHITE else 'BLACK',
+                'moving_piece_type': move['moving_piece'].__class__.__name__ if 'moving_piece' in move and move['moving_piece'] else None,
+                'moving_piece_color': 'WHITE' if 'moving_piece' in move and move['moving_piece'] and move['moving_piece'].color == WHITE else 'BLACK',
+                'captured_piece_type': move['captured_piece'].__class__.__name__ if 'captured_piece' in move and move['captured_piece'] else None,
+                'captured_piece_color': 'WHITE' if 'captured_piece' in move and move['captured_piece'] and move['captured_piece'].color == WHITE else ('BLACK' if 'captured_piece' in move and move['captured_piece'] else None)
             }
-            if move['castling']:
-                move_data['rook_from'] = move['rook_from']
-                move_data['rook_to'] = move['rook_to']
+            if move.get('castling'):
+                move_data['rook_from'] = move.get('rook_from')
+                move_data['rook_to'] = move.get('rook_to')
+            if move.get('promotion'):
+                move_data['promotion_piece_type'] = move.get('promoted_piece').__class__.__name__ if move.get('promoted_piece') else None
+                move_data['promotion_original_pawn_type'] = move.get('original_pawn').__class__.__name__ if move.get('original_pawn') else 'Pawn'
+
             serialized.append(move_data)
         return serialized
+
+    def _deserializeMoveHistory(self, serialized_history):
+        """Restore move history from saved data."""
+        # Keep the raw serialized move history so undo can resolve state references as needed.
+        return [dict(entry) for entry in serialized_history] if serialized_history else []
+
+    def _createPieceFromType(self, piece_type, color, square):
+        piece_classes = {
+            'Pawn': Pawn, 'Knight': Knight, 'Bishop': Bishop,
+            'Rook': Rook, 'Queen': Queen, 'King': King
+        }
+        cls = piece_classes.get(piece_type, Pawn)
+        color_value = WHITE if color == 'WHITE' else PIECEBLACK
+        return cls(square, color_value, parent=self.piecesNode)
 
     def _deserializeGameState(self, game_state):
         """Restore game state from a serialized dictionary."""
@@ -871,12 +894,12 @@ class ChessGame(AppState):
         self.blackKingMoved = game_state['blackKingMoved']
         self.whiteRookMoved = game_state['whiteRookMoved']
         self.blackRookMoved = game_state['blackRookMoved']
-        self.moveNotation = game_state['moveNotation']
+        self.moveNotation = game_state.get('moveNotation', [])
         self.gameOver = False
-        
-        # Restore move history (simplified - store basic info only)
-        self.moveHistory = []
-        
+
+        # Restore move history
+        self.moveHistory = self._deserializeMoveHistory(game_state.get('moveHistory', []))
+
         # Restore board squares
         for i in range(64):
             sq = self.app.loader.loadModel("models/square")
@@ -930,16 +953,25 @@ class ChessGame(AppState):
         """Undo the last move if possible."""
         if not self.moveHistory or self.gameOver:
             return
-        
+
         # Get the last move
         last_move = self.moveHistory.pop()
         if self.moveNotation:
             self.moveNotation.pop()
-        
+
+        # If the move is loaded from a saved file, it may be serialized with no object refs.
+        if 'moving_piece' not in last_move:
+            self._undoSerializedMove(last_move)
+            self.rotateCamera(instant=True)
+            self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+            self.clearHighlights()
+            self.updateMoveHistoryDisplay()
+            return
+
         # Remove promoted piece if any
         if last_move.get('promotion', False):
             last_move['promoted_piece'].obj.removeNode()
-        
+
         # Restore the board state
         fr = last_move['fr']
         to = last_move['to']
@@ -1026,6 +1058,82 @@ class ChessGame(AppState):
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
         self.clearHighlights()
         self.updateMoveHistoryDisplay()
+
+    def _undoSerializedMove(self, move):
+        """Undo a serialized move record loaded from a save file."""
+        fr = move['fr']
+        to = move['to']
+        promotion = move.get('promotion', False)
+        en_passant_capture = move.get('en_passant_capture')
+        castling = move.get('castling', False)
+
+        # The moved piece should be at the destination square currently.
+        moving_piece = self.pieces[to] if to is not None else None
+        if not moving_piece and promotion:
+            # promotion may have removed original pawn; assume piece at to is the promoted piece
+            moving_piece = self.pieces[to]
+
+        # Build captured piece object if it existed
+        captured_piece = None
+        if en_passant_capture is not None:
+            captured_piece_type = move.get('captured_piece_type', 'Pawn')
+            captured_piece_color = move.get('captured_piece_color', 'BLACK')
+            captured_piece = self._createPieceFromType(captured_piece_type, captured_piece_color, en_passant_capture)
+            self.pieces[en_passant_capture] = captured_piece
+            # captured pawn is not on 'to' in en passant
+            self.pieces[to] = None
+        elif move.get('captured_piece_type'):
+            captured_piece_type = move['captured_piece_type']
+            captured_piece_color = move.get('captured_piece_color', 'BLACK')
+            captured_piece = self._createPieceFromType(captured_piece_type, captured_piece_color, to)
+            self.pieces[to] = captured_piece
+
+        if promotion:
+            # Remove promoted piece from destination and restore pawn to source.
+            if moving_piece and hasattr(moving_piece, 'obj') and moving_piece.obj:
+                moving_piece.obj.removeNode()
+            pawn_color = 'WHITE' if move.get('moving_piece_color', 'WHITE') == 'WHITE' else 'BLACK'
+            pawn = self._createPieceFromType('Pawn', pawn_color, fr)
+            self.pieces[fr] = pawn
+            pawn.square = fr
+            # keep the destination capture or empty square
+            if captured_piece:
+                self.pieces[to] = captured_piece
+            else:
+                self.pieces[to] = None
+        else:
+            # Non-promotion revert
+            if moving_piece:
+                self.pieces[fr] = moving_piece
+                self.pieces[to] = captured_piece
+                moving_piece.square = fr
+                if hasattr(moving_piece, 'obj') and moving_piece.obj:
+                    moving_piece.obj.reparentTo(self.piecesNode)
+                    moving_piece.obj.setPos(SquarePos(fr))
+                else:
+                    moving_piece.obj = self.app.loader.loadModel(moving_piece.model)
+                    moving_piece.obj.reparentTo(self.piecesNode)
+                    moving_piece.obj.setColor(moving_piece.color)
+                    moving_piece.obj.setPos(SquarePos(fr))
+
+        if castling:
+            rook_from = move.get('rook_from')
+            rook_to = move.get('rook_to')
+            rook = self.pieces[rook_to]
+            if rook:
+                self.pieces[rook_from] = rook
+                self.pieces[rook_to] = None
+                rook.square = rook_from
+                if hasattr(rook, 'obj') and rook.obj:
+                    rook.obj.setPos(SquarePos(rook_from))
+
+        # Restore state flags
+        self.enPassantSquare = move.get('en_passant_square')
+        self.whiteKingMoved = move.get('white_king_moved', False)
+        self.blackKingMoved = move.get('black_king_moved', False)
+        self.whiteRookMoved = move.get('white_rooks_moved', [False, False])
+        self.blackRookMoved = move.get('black_rooks_moved', [False, False])
+        self.turn = WHITE if move.get('turn') == 'WHITE' else PIECEBLACK
 
     def squareToAlgebraic(self, square):
         """Convert square index to algebraic notation (e.g., 0 -> 'a1')."""
@@ -1190,6 +1298,7 @@ class ChessGame(AppState):
 
         self.setupBoard()
         self.clearHighlights()
+        self.updateMoveHistoryDisplay()
         self.setStatus("Turn: WHITE" if self.turn == WHITE else "Turn: BLACK")
 
     # Include all the other game methods (movePiece, isValidMove, etc.)
