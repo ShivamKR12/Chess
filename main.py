@@ -300,32 +300,18 @@ class ChessGame(AppState):
         self.initializeGame()
     
     def initializeGame(self):
-        """Initialize the chess game (copied from original Chess.__init__)."""
-        # Note: We don't call ShowBase.__init__ here since we're using the app's ShowBase instance
-        
-        # Create a WindowProperties object to configure window settings
-        props = WindowProperties()
-        # Set the window title to "Chess"
-        props.setTitle("Chess")
-        # Set the window icon filename
-        props.setIconFilename("panda3d-logo.ico")
-        # Apply the window properties to the window
-        base.win.requestProperties(props) # type: ignore
-
-        # Set a nicer light sky background color
-        self.app.setBackgroundColor(0.53, 0.81, 0.92, 1)
-
+        """Initialize the chess game state, including board setup and camera configuration."""
         # Disable Panda3D's default mouse camera controls.
         self.app.disableMouse()
 
         # Create a pivot node for camera rotation during turn changes.
-        self.camPivot = self.app.render.attachNewNode("camPivot") # type: ignore
+        self.camPivot = self.app.render.attachNewNode("camPivot")
         self.camPivot.setPos(0, 0, 0)
 
         # Position the camera above and behind the board, looking at the center.
-        self.app.camera.reparentTo(self.camPivot) # type: ignore
-        self.app.camera.setPos(0, -12, 8) # type: ignore
-        self.app.camera.lookAt(0, 0, 0) # type: ignore
+        self.app.camera.reparentTo(self.camPivot)
+        self.app.camera.setPos(0, -12, 8)
+        self.app.camera.lookAt(0, 0, 0)
 
         # Set initial camera rotation based on player color
         # If playing as black, rotate camera 180 degrees to face black side
@@ -361,21 +347,21 @@ class ChessGame(AppState):
         self.turnText.hide()  # We're using statusLabel for consolidated status display
 
         # Load game sound effects
-        self.captureSound = loader.loadSfx("sounds/capture.mp3") # type: ignore
-        self.castleSound = loader.loadSfx("sounds/castle.mp3") # type: ignore
-        self.moveCheckSound = loader.loadSfx("sounds/move-check.mp3") # type: ignore
-        self.moveSelfSound = loader.loadSfx("sounds/move-self.mp3") # type: ignore
-        self.notifySound = loader.loadSfx("sounds/notify.mp3") # type: ignore
-        self.promoteSound = loader.loadSfx("sounds/promote.mp3") # type: ignore
+        self.captureSound = self.app.loader.loadSfx("sounds/capture.mp3")
+        self.castleSound = self.app.loader.loadSfx("sounds/castle.mp3")
+        self.moveCheckSound = self.app.loader.loadSfx("sounds/move-check.mp3")
+        self.moveSelfSound = self.app.loader.loadSfx("sounds/move-self.mp3")
+        self.notifySound = self.app.loader.loadSfx("sounds/notify.mp3")
+        self.promoteSound = self.app.loader.loadSfx("sounds/promote.mp3")
 
         # Bind the escape key to return to menu
         self.app.accept('escape', self.returnToMenu)
+        
+        # Handle window close event to properly exit
+        self.app.accept('window-event', self.handleWindowEvent)
 
         # Set up lighting for the 3D scene.
         self.setupLights()
-
-        # Set up the skydome background
-        self.setupSkydome()
 
         # Configure collision detection for mouse picking.
         self.setupPicking()
@@ -391,7 +377,7 @@ class ChessGame(AppState):
         self.dragging = False  # Square of piece being dragged (False if none)
 
         # Add a task that runs every frame to handle mouse interaction.
-        taskMgr.add(self.mouseTask, "mouseTask") # type: ignore
+        self.app.taskMgr.add(self.mouseTask, "mouseTask")
 
         # Bind left mouse button press to grab a piece.
         self.app.accept("mouse1", self.grabPiece)
@@ -403,6 +389,14 @@ class ChessGame(AppState):
     def returnToMenu(self):
         """Return to the main menu."""
         self.app.showMenu()
+    
+    def handleWindowEvent(self, window):
+        """Handle window events, including close."""
+        if window.getProperties().getMinimized():
+            pass  # Window minimized
+        elif window.isClosed():
+            # Window closed, exit the application
+            sys.exit(0)
     
     def cleanup(self):
         """Clean up game resources."""
@@ -429,7 +423,15 @@ class ChessGame(AppState):
             self.turnText.destroy()
         
         # Stop tasks
-        taskMgr.remove("mouseTask") # type: ignore
+        self.app.taskMgr.remove("mouseTask")
+        
+        # Remove lights
+        if hasattr(self, 'ambientLightNode'):
+            self.app.render.clearLight(self.ambientLightNode)
+            self.ambientLightNode.removeNode()
+        if hasattr(self, 'directionalLightNode'):
+            self.app.render.clearLight(self.directionalLightNode)
+            self.directionalLightNode.removeNode()
         
         # Clear event handlers
         self.app.ignoreAll()
@@ -444,7 +446,7 @@ class ChessGame(AppState):
         """
         
         # Create a root node to hold all square models.
-        self.squareRoot = render.attachNewNode("squareRoot") # type: ignore
+        self.squareRoot = self.app.render.attachNewNode("squareRoot")
 
         self.squares = [None] * 64  # List of square NodePaths
         self.pieces = [None] * 64   # List of Piece objects (or None)
@@ -452,7 +454,7 @@ class ChessGame(AppState):
         for i in range(64):
             # Create and position each square
             # Load the square model from disk.
-            sq = loader.loadModel("models/square") # type: ignore
+            sq = self.app.loader.loadModel("models/square")
 
             # Attach to the square root node.
             sq.reparentTo(self.squareRoot)
@@ -507,7 +509,7 @@ class ChessGame(AppState):
         self.pickerNode = CollisionNode('mouseRay')
 
         # Attach the collision node to the camera.
-        self.pickerNP = camera.attachNewNode(self.pickerNode) # type: ignore
+        self.pickerNP = self.app.camera.attachNewNode(self.pickerNode)
 
         # Set the ray to only collide with objects in mask bit 1 (squares).
         self.pickerNode.setFromCollideMask(BitMask32.bit(1))
@@ -606,9 +608,9 @@ class ChessGame(AppState):
         if self.playerColor == 1:  # Playing as black
             self.camPivot.setH(180)  # Face black side initially
             
-        camera.reparentTo(self.camPivot) # type: ignore
-        camera.setPos(0, -12, 8) # type: ignore
-        camera.lookAt(0, 0, 0) # type: ignore
+        self.app.camera.reparentTo(self.camPivot)
+        self.app.camera.setPos(0, -12, 8)
+        self.app.camera.lookAt(0, 0, 0)
 
         self.enPassantSquare = None
         self.whiteKingMoved = False
@@ -928,12 +930,12 @@ class ChessGame(AppState):
             mpos = self.app.mouseWatcherNode.getMouse()
 
             # Update the collision ray from camera through mouse position
-            self.pickerRay.setFromLens(self.app.camNode, mpos.getX(), mpos.getY()) # type: ignore
+            self.pickerRay.setFromLens(self.app.camNode, mpos.getX(), mpos.getY())
 
             # If dragging a piece, update its position to follow mouse
             if self.dragging is not False:
-                nearPoint = self.app.render.getRelativePoint(self.app.camera, self.pickerRay.getOrigin()) # type: ignore
-                nearVec = self.app.render.getRelativeVector(self.app.camera, self.pickerRay.getDirection()) # type: ignore
+                nearPoint = self.app.render.getRelativePoint(self.app.camera, self.pickerRay.getOrigin())
+                nearVec = self.app.render.getRelativeVector(self.app.camera, self.pickerRay.getDirection())
                 # Position piece at Z=0.5 along the mouse ray
                 self.pieces[self.dragging].obj.setPos(
                     PointAtZ(.5, nearPoint, nearVec)
@@ -1108,32 +1110,13 @@ class ChessGame(AppState):
         directional.setDirection(LVector3(0, 45, -45))
         directional.setColor((0.2, 0.2, 0.2, 1))
 
-        # Add ambient light to the scene
-        self.app.render.setLight(self.app.render.attachNewNode(ambient)) # type: ignore
-
-        # Add directional light to the scene
-        self.app.render.setLight(self.app.render.attachNewNode(directional)) # type: ignore
-
-    def setupSkydome(self):
-        """
-        Set up the skydome background for the 3D scene.
-        """
-        # Load the skydome model
-        self.skydome = loader.loadModel("models/skydome.glb") # type: ignore
+        # Attach lights to render and store references for cleanup
+        self.ambientLightNode = self.app.render.attachNewNode(ambient)
+        self.directionalLightNode = self.app.render.attachNewNode(directional)
         
-        # Scale it up significantly (user mentioned default scale is only 1)
-        self.skydome.setScale(50)  # Much larger scale for background
-        
-        # Position it at the center of the scene
-        self.skydome.setPos(0, 0, 0)
-        
-        # Make sure it's behind everything else (negative Z or far away)
-        self.skydome.setBin("background", 1)  # Render as background
-        self.skydome.setDepthWrite(False)     # Don't write to depth buffer
-        self.skydome.setDepthTest(False)      # Don't test depth
-        
-        # Reparent to render
-        self.skydome.reparentTo(self.app.render) # type: ignore
+        # Add lights to the scene
+        self.app.render.setLight(self.ambientLightNode)
+        self.app.render.setLight(self.directionalLightNode)
 
 
 class ChessApp(ShowBase):
@@ -1153,14 +1136,35 @@ class ChessApp(ShowBase):
         props.setIconFilename("panda3d-logo.ico")
         base.win.requestProperties(props) # type: ignore
         
-        # Set background color
-        self.setBackgroundColor(0.53, 0.81, 0.92, 1)
+        # Set up the persistent skydome background for the entire app
+        self.setupSkydome()
         
         # Initialize state management
         self.currentState = None
         
         # Start with the menu
         self.showMenu()
+    
+    def setupSkydome(self):
+        """
+        Set up the skydome background for the 3D scene (persistent across states).
+        """
+        # Load the skydome model
+        self.skydome = self.loader.loadModel("models/skydome.glb")
+        
+        # Scale it up significantly (user mentioned default scale is only 1)
+        self.skydome.setScale(50)  # Much larger scale for background
+        
+        # Position it at the center of the scene
+        self.skydome.setPos(0, 0, 0)
+        
+        # Make sure it's behind everything else (negative Z or far away)
+        self.skydome.setBin("background", 1)  # Render as background
+        self.skydome.setDepthWrite(False)     # Don't write to depth buffer
+        self.skydome.setDepthTest(False)      # Don't test depth
+        
+        # Reparent to render
+        self.skydome.reparentTo(self.render)
     
     def showMenu(self):
         """
