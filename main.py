@@ -741,6 +741,9 @@ class ChessGame(AppState):
         self.blackRookMoved = last_move['black_rooks_moved']
         self.turn = last_move['turn']
         
+        # Rotate camera back to match the restored turn
+        self.rotateCamera()
+        
         # Update status
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
         self.clearHighlights()
