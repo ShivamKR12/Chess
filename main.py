@@ -335,6 +335,9 @@ class ChessGame(AppState):
         # List of valid destination squares for the currently selected piece.
         self.validMoves = []
 
+        # Move history for undo functionality
+        self.moveHistory = []
+
         # Create on-screen text to display whose turn it is.
         self.turnText = OnscreenText(
             text="Turn: WHITE",
@@ -417,10 +420,20 @@ class ChessGame(AppState):
             self.statusLabel.destroy()
         if hasattr(self, 'restartButton'):
             self.restartButton.destroy()
+        if hasattr(self, 'resignButton'):
+            self.resignButton.destroy()
+        if hasattr(self, 'undoButton'):
+            self.undoButton.destroy()
         if hasattr(self, 'menuButton'):
             self.menuButton.destroy()
         if hasattr(self, 'turnText'):
             self.turnText.destroy()
+        if hasattr(self, 'resignDialog'):
+            self.resignDialog.cleanup()
+            del self.resignDialog
+        if hasattr(self, 'promotionDialog'):
+            self.promotionDialog.cleanup()
+            del self.promotionDialog
         
         # Stop tasks
         self.app.taskMgr.remove("mouseTask")
@@ -577,10 +590,27 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.6, 0.3, 0.3, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(0, 0, -0.05),
+            pos=(-0.2, 0, -0.05),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.showResignDialog
+        )
+        
+        # Undo button
+        self.undoButton = DirectButton(
+            parent=self.statusFrame,
+            text="Undo",
+            text_pos=(0, -0.01),
+            text_scale=0.05,
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0.5, 0.5, 0.8, 1),
+            frameSize=(-0.15, 0.15, -0.04, 0.04),
+            pos=(0.2, 0, -0.05),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
+            command=self.undoMove
         )
         
         # Menu button on the right
@@ -641,6 +671,157 @@ class ChessGame(AppState):
         self.setStatus(f"RESIGNATION! {winner} wins")
         self.clearHighlights()
 
+    def undoMove(self):
+        """Undo the last move if possible."""
+        if not self.moveHistory or self.gameOver:
+            return
+        
+        # Get the last move
+        last_move = self.moveHistory.pop()
+        
+        # Restore the board state
+        fr = last_move['fr']
+        to = last_move['to']
+        moving_piece = last_move['moving_piece']
+        captured_piece = last_move['captured_piece']
+        
+        # Move piece back
+        self.pieces[fr] = moving_piece
+        self.pieces[to] = captured_piece
+        moving_piece.square = fr
+        moving_piece.obj.setPos(SquarePos(fr))
+        
+        # Restore captured piece if any
+        if captured_piece:
+            captured_piece.obj = self.app.loader.loadModel(captured_piece.model)
+            captured_piece.obj.reparentTo(self.app.render)
+            captured_piece.obj.setColor(captured_piece.color)
+            captured_piece.obj.setPos(SquarePos(to))
+            captured_piece.square = to
+        
+        # Handle en passant undo
+        if 'en_passant_capture' in last_move:
+            captured_sq = last_move['en_passant_capture']
+            victim = last_move['en_passant_victim']
+            self.pieces[captured_sq] = victim
+            victim.obj = self.app.loader.loadModel(victim.model)
+            victim.obj.reparentTo(self.app.render)
+            victim.obj.setColor(victim.color)
+            victim.obj.setPos(SquarePos(captured_sq))
+            victim.square = captured_sq
+        
+        # Handle castling undo
+        if last_move['castling']:
+            rook_from = last_move['rook_from']
+            rook_to = last_move['rook_to']
+            rook = self.pieces[rook_to]
+            self.pieces[rook_from] = rook
+            self.pieces[rook_to] = None
+            rook.obj.setPos(SquarePos(rook_from))
+            rook.square = rook_from
+        
+        # Handle promotion undo
+        if last_move['promotion']:
+            promoted_piece = last_move['promoted_piece']
+            original_pawn = last_move['original_pawn']
+            self.pieces[to] = original_pawn
+            original_pawn.obj = self.app.loader.loadModel(original_pawn.model)
+            original_pawn.obj.reparentTo(self.app.render)
+            original_pawn.obj.setColor(original_pawn.color)
+            original_pawn.obj.setPos(SquarePos(to))
+            original_pawn.square = to
+            # Remove promoted piece
+            promoted_piece.obj.removeNode()
+        
+        # Restore game state
+        self.enPassantSquare = last_move['en_passant_square']
+        self.whiteKingMoved = last_move['white_king_moved']
+        self.blackKingMoved = last_move['black_king_moved']
+        self.whiteRookMoved = last_move['white_rooks_moved']
+        self.blackRookMoved = last_move['black_rooks_moved']
+        self.turn = last_move['turn']
+        
+        # Update status
+        self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+        self.clearHighlights()
+
+    def showPromotionDialog(self, square):
+        """Show a dialog for pawn promotion choice."""
+        if self.gameOver:
+            return
+        
+        # Create the promotion dialog
+        self.promotionDialog = DirectDialog(
+            dialogName="promotionDialog",
+            text="Choose promotion piece:",
+            buttonTextList=["Queen", "Rook", "Bishop", "Knight"],
+            buttonValueList=["Queen", "Rook", "Bishop", "Knight"],
+            command=self.onPromotionChoice,
+            extraArgs=[square]
+        )
+
+    def onPromotionChoice(self, piece_type, square):
+        """Handle the promotion piece selection."""
+        if self.gameOver:
+            return
+        
+        # Get the pawn to promote
+        pawn = self.pieces[square]
+        if not isinstance(pawn, Pawn):
+            return
+        
+        # Create the new piece
+        if piece_type == "Queen":
+            new_piece = Queen(square, pawn.color)
+        elif piece_type == "Rook":
+            new_piece = Rook(square, pawn.color)
+        elif piece_type == "Bishop":
+            new_piece = Bishop(square, pawn.color)
+        elif piece_type == "Knight":
+            new_piece = Knight(square, pawn.color)
+        else:
+            return
+        
+        # Replace the pawn
+        pawn.obj.removeNode()
+        self.pieces[square] = new_piece
+        
+        # Update the last move record for undo
+        if self.moveHistory:
+            last_move = self.moveHistory[-1]
+            last_move['promotion'] = True
+            last_move['promoted_piece'] = new_piece
+            last_move['original_pawn'] = pawn
+        
+        # Clean up the dialog
+        if hasattr(self, 'promotionDialog'):
+            self.promotionDialog.cleanup()
+            del self.promotionDialog
+        
+        # Now continue with post-move logic
+        enemy = PIECEBLACK if self.turn == WHITE else WHITE
+        enemy_in_check = self.isKingInCheck(enemy)
+        black_in_checkmate = self.isCheckmate(PIECEBLACK)
+        white_in_checkmate = self.isCheckmate(WHITE)
+        black_stalemate = self.isStalemate(PIECEBLACK)
+        white_stalemate = self.isStalemate(WHITE)
+
+        if black_in_checkmate or white_in_checkmate:
+            self.gameOver = True
+            winner = "WHITE" if black_in_checkmate else "BLACK"
+            self.setStatus(f"CHECKMATE! {winner} wins")
+            self.clearHighlights()  # Clear all highlights when game ends
+        elif black_stalemate or white_stalemate:
+            self.gameOver = True
+            self.setStatus("STALEMATE. Draw")
+            self.clearHighlights()  # Clear all highlights when game ends
+        else:
+            self.switchTurn()
+            if enemy_in_check:
+                self.setStatus(f"Check to {'BLACK' if enemy == PIECEBLACK else 'WHITE'}")
+            else:
+                self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+
     def onNewGame(self):
         """Reset the board and gameplay state for a new game."""
         # Remove old pieces
@@ -669,6 +850,7 @@ class ChessGame(AppState):
         self.whiteRookMoved = [False, False]
         self.blackRookMoved = [False, False]
         self.validMoves = []
+        self.moveHistory = []
         self.gameOver = False
         self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
 
@@ -685,6 +867,23 @@ class ChessGame(AppState):
         """
         moving = self.pieces[fr]  # The piece being moved
         target = self.pieces[to]  # Piece at destination (if any)
+
+        # Record the move for undo functionality
+        move_record = {
+            'fr': fr,
+            'to': to,
+            'moving_piece': moving,
+            'captured_piece': target,
+            'en_passant_square': self.enPassantSquare,
+            'castling': False,
+            'promotion': False,
+            'promoted_piece': None,
+            'white_king_moved': self.whiteKingMoved,
+            'black_king_moved': self.blackKingMoved,
+            'white_rooks_moved': self.whiteRookMoved.copy(),
+            'black_rooks_moved': self.blackRookMoved.copy(),
+            'turn': self.turn
+        }
 
         if target:
             # If there's a piece at the destination, capture it
@@ -704,6 +903,7 @@ class ChessGame(AppState):
         self.lastMove = (fr, to)
 
         # Handle en passant capture
+        en_passant_capture = False
         if isinstance(moving, Pawn) and to == self.enPassantSquare:
             # If this is an en passant capture
             # Calculate the square of the captured pawn.
@@ -713,6 +913,8 @@ class ChessGame(AppState):
             if victim:
                 victim.obj.removeNode()  # Remove captured pawn
                 self.pieces[captured] = None  # Clear the square
+                move_record['en_passant_capture'] = captured
+                move_record['en_passant_victim'] = victim
 
         # Set en passant square for next move
         if isinstance(moving, Pawn) and abs((to // 8) - (fr // 8)) == 2:
@@ -725,6 +927,7 @@ class ChessGame(AppState):
         # Handle castling
         if isinstance(moving, King) and abs((to % 8) - (fr % 8)) == 2:
             # If this is a castling move (king moves 2 squares horizontally)
+            move_record['castling'] = True
             if to > fr:
                 # Kingside castling
                 rookFrom = fr + 3  # Rook's current square
@@ -739,6 +942,8 @@ class ChessGame(AppState):
             self.pieces[rookFrom] = None
             self.pieces[rookTo] = rook
             rook.obj.setPos(SquarePos(rookTo))
+            move_record['rook_from'] = rookFrom
+            move_record['rook_to'] = rookTo
 
         # Update castling rights when king moves
         if isinstance(moving, King):
@@ -754,16 +959,8 @@ class ChessGame(AppState):
             if fr == 56: self.blackRookMoved[0] = True
             if fr == 63: self.blackRookMoved[1] = True
 
-        # Handle pawn promotion
-        piece = self.pieces[to]  # The piece that just moved
-        isPromotion = False
-        if isinstance(piece, Pawn):
-            row = to // 8  # Get the row (rank) of the destination
-            if (piece.color == WHITE and row == 7) or (piece.color == PIECEBLACK and row == 0):
-                # If pawn reached the opposite end of the board
-                piece.obj.removeNode()  # Remove the pawn
-                self.pieces[to] = Queen(to, piece.color)  # Replace with queen
-                isPromotion = True
+        # Add the move to history
+        self.moveHistory.append(move_record)
 
         # Play sound effect by move type
         isCapture = target is not None or (isinstance(moving, Pawn) and to == self.enPassantSquare)
@@ -771,7 +968,7 @@ class ChessGame(AppState):
         enemy = PIECEBLACK if moving.color == WHITE else WHITE
         inCheck = self.isKingInCheck(enemy)
 
-        if isPromotion:
+        if move_record['promotion']:
             self.promoteSound.play()
         elif isCastle:
             self.castleSound.play()
@@ -1057,12 +1254,22 @@ class ChessGame(AppState):
             else:
                 self.movePiece(self.dragging, self.hiSq)
 
-                enemy = PIECEBLACK if self.turn == WHITE else WHITE
-                enemy_in_check = self.isKingInCheck(enemy)
-                black_in_checkmate = self.isCheckmate(PIECEBLACK)
-                white_in_checkmate = self.isCheckmate(WHITE)
-                black_stalemate = self.isStalemate(PIECEBLACK)
-                white_stalemate = self.isStalemate(WHITE)
+            # Check for pawn promotion
+            piece = self.pieces[self.hiSq]
+            if isinstance(piece, Pawn) and ((piece.color == WHITE and self.hiSq // 8 == 7) or (piece.color == PIECEBLACK and self.hiSq // 8 == 0)):
+                self.showPromotionDialog(self.hiSq)
+                self.dragging = False
+                self.validMoves = []
+                self.hiSq = False
+                self.highlightMoves()
+                return
+
+            enemy = PIECEBLACK if self.turn == WHITE else WHITE
+            enemy_in_check = self.isKingInCheck(enemy)
+            black_in_checkmate = self.isCheckmate(PIECEBLACK)
+            white_in_checkmate = self.isCheckmate(WHITE)
+            black_stalemate = self.isStalemate(PIECEBLACK)
+            white_stalemate = self.isStalemate(WHITE)
 
             if black_in_checkmate or white_in_checkmate:
                 self.gameOver = True
