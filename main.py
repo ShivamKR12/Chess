@@ -426,11 +426,8 @@ class ChessGame(AppState):
             # Window closed, exit the application
             sys.exit(0)
 
-        try:
-            # Update camera lens on resize to avoid horizontal stretch and show more scene in wider windows
-            self.updateCameraForAspect()
-        except Exception:
-            pass
+        # Update camera lens on resize to avoid horizontal stretch and show more scene in wider windows
+        self.updateCameraForAspect()
     
     def cleanup(self):
         """Clean up game resources."""

@@ -17,8 +17,6 @@ setup(
             'include_patterns': [
                 '**/*.jpg',
                 '**/*.egg',
-                '**/*.egg.pz',
-                '**/*.glb',
                 '**/*.mp3',
                 '**/*.json',
                 '**/*.bam',
