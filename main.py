@@ -12,9 +12,9 @@ from direct.showbase.ShowBase import ShowBase
 # This includes essential classes like NodePath, Vec3, CollisionRay, BitMask32, etc.
 # Used for 3D graphics, collision detection, and scene management.
 from panda3d.core import (
-    LPoint3, LVector3, BitMask32, CollisionNode, CollisionRay,
+    LPoint3, LVector3, Vec3, BitMask32, CollisionNode, CollisionRay,
     CollisionHandlerQueue, WindowProperties, AmbientLight, DirectionalLight,
-    CollisionTraverser, TextNode
+    CollisionTraverser, TextNode, AntialiasAttrib, load_prc_file_data, Material
 )
 
 # Import interval functions for creating animations.
@@ -37,6 +37,8 @@ import sys
 # Import json for game state serialization
 import json
 import os
+import math
+import random
 from datetime import datetime
 
 # Import tkinter for file dialogs
@@ -184,7 +186,7 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             frameColor=(0.6, 0.3, 0.3, 1),
             frameSize=(-0.3, 0.3, -0.05, 0.05),
-            pos=(0, 0, 0.1),
+            pos=(0, 0, 0.05),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.startPvAI
@@ -333,6 +335,9 @@ class ChessGame(AppState):
         # Start the game with the selected player's color
         self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
 
+        # Control rotation behavior: disable for PvAI to keep player view fixed
+        self.rotateCameraEnabled = (self.mode != 'pvai')
+
         # Track the square where en passant capture is possible (or None).
         self.enPassantSquare = None
 
@@ -363,6 +368,7 @@ class ChessGame(AppState):
             mayChange=1
         )
         self.turnText.hide()  # We're using statusLabel for consolidated status display
+        self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
 
         # Load game sound effects
         self.captureSound = self.app.loader.loadSfx("sounds/capture.mp3")
@@ -403,18 +409,28 @@ class ChessGame(AppState):
 
         # Bind left mouse button release to release/drop a piece.
         self.app.accept("mouse1-up", self.releasePiece)
-    
+
+        # If Player vs AI mode and AI starts, schedule the first AI move
+        if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
+            self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
+
     def returnToMenu(self):
         """Return to the main menu."""
         self.app.showMenu()
     
     def handleWindowEvent(self, window):
-        """Handle window events, including close."""
+        """Handle window events, including resize / close updates."""
         if window.getProperties().getMinimized():
             pass  # Window minimized
         elif window.isClosed():
             # Window closed, exit the application
             sys.exit(0)
+
+        try:
+            # Update camera lens on resize to avoid horizontal stretch and show more scene in wider windows
+            self.updateCameraForAspect()
+        except Exception:
+            pass
     
     def cleanup(self):
         """Clean up game resources."""
@@ -460,13 +476,12 @@ class ChessGame(AppState):
         self.app.taskMgr.remove("mouseTask")
         
         # Remove lights
-        if hasattr(self, 'ambientLightNode'):
-            self.app.render.clearLight(self.ambientLightNode)
-            self.ambientLightNode.removeNode()
-        if hasattr(self, 'directionalLightNode'):
-            self.app.render.clearLight(self.directionalLightNode)
-            self.directionalLightNode.removeNode()
-        
+        for light_attr in ['ambientLightNode', 'mainDirectionalLightNode', 'fillDirectionalLightNode', 'backDirectionalLightNode', 'directionalLightNode']:
+            if hasattr(self, light_attr):
+                node = getattr(self, light_attr)
+                self.app.render.clearLight(node)
+                node.removeNode()
+
         # Clear event handlers
         self.app.ignoreAll()
 
@@ -688,15 +703,16 @@ class ChessGame(AppState):
             command=self.returnToMenu
         )
         
-        # Move history display on the right side
+        # Move history display on the right side (optional, hidden by default)
         self.moveHistoryFrame = DirectFrame(
-            frameColor=(0.2, 0.4, 0.6, 0.9),
+            frameColor=(0.05, 0.05, 0.06, 0.8),
             frameSize=(-0.23, 0.23, -0.85, 0.85),
             pos=(1.1, 0, -0.15),
-            relief='groove',
-            borderWidth=(0.02, 0.02)
+            relief='flat',
+            borderWidth=(0.01, 0.01)
         )
-        
+        self.moveHistoryFrame.hide()
+
         self.moveHistoryLabel = DirectLabel(
             parent=self.moveHistoryFrame,
             text="",
@@ -717,6 +733,16 @@ class ChessGame(AppState):
             self.statusLabel['text'] = text
         if text.startswith("Turn:"):
             self.turnText.setText(text)
+
+    def _applyPieceMaterial(self, piece):
+        """Apply material and shader settings for piece objects created during state changes."""
+        if not piece or not hasattr(piece, 'obj') or not piece.obj:
+            return
+        mat = Material()
+        mat.setShininess(30.0)
+        mat.setSpecular((0.6, 0.6, 0.6, 1))
+        piece.obj.setMaterial(mat, 1)
+        piece.obj.setShaderAuto()
 
     def saveGame(self):
         """Save the current game state to a JSON file."""
@@ -949,12 +975,11 @@ class ChessGame(AppState):
         self.setStatus(f"RESIGNATION! {winner} wins")
         self.clearHighlights()
 
-    def undoMove(self):
-        """Undo the last move if possible."""
-        if not self.moveHistory or self.gameOver:
+    def _undoLastMove(self):
+        """Undo a single move and restore game state for that move."""
+        if not self.moveHistory:
             return
 
-        # Get the last move
         last_move = self.moveHistory.pop()
         if self.moveNotation:
             self.moveNotation.pop()
@@ -963,9 +988,6 @@ class ChessGame(AppState):
         if 'moving_piece' not in last_move:
             self._undoSerializedMove(last_move)
             self.rotateCamera(instant=True)
-            self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
-            self.clearHighlights()
-            self.updateMoveHistoryDisplay()
             return
 
         # Remove promoted piece if any
@@ -977,7 +999,7 @@ class ChessGame(AppState):
         to = last_move['to']
         moving_piece = last_move['moving_piece']
         captured_piece = last_move['captured_piece']
-        
+
         # Move piece back
         self.pieces[fr] = moving_piece
         self.pieces[to] = captured_piece
@@ -988,8 +1010,9 @@ class ChessGame(AppState):
             moving_piece.obj = self.app.loader.loadModel(moving_piece.model)
             moving_piece.obj.reparentTo(self.piecesNode)
             moving_piece.obj.setColor(moving_piece.color)
+            self._applyPieceMaterial(moving_piece)
             moving_piece.obj.setPos(SquarePos(fr))
-        
+
         # Restore captured piece if any
         if captured_piece:
             captured_piece.square = to
@@ -999,8 +1022,9 @@ class ChessGame(AppState):
                 captured_piece.obj = self.app.loader.loadModel(captured_piece.model)
                 captured_piece.obj.reparentTo(self.piecesNode)
                 captured_piece.obj.setColor(captured_piece.color)
+                self._applyPieceMaterial(captured_piece)
                 captured_piece.obj.setPos(SquarePos(to))
-        
+
         # Handle en passant undo
         if 'en_passant_capture' in last_move:
             captured_sq = last_move['en_passant_capture']
@@ -1013,8 +1037,9 @@ class ChessGame(AppState):
                 victim.obj = self.app.loader.loadModel(victim.model)
                 victim.obj.reparentTo(self.piecesNode)
                 victim.obj.setColor(victim.color)
+                self._applyPieceMaterial(victim)
                 victim.obj.setPos(SquarePos(captured_sq))
-        
+
         # Handle castling undo
         if last_move['castling']:
             rook_from = last_move['rook_from']
@@ -1025,7 +1050,7 @@ class ChessGame(AppState):
             if hasattr(rook, 'obj') and rook.obj:
                 rook.obj.setPos(SquarePos(rook_from))
             rook.square = rook_from
-        
+
         # Handle promotion undo
         if last_move['promotion']:
             promoted_piece = last_move['promoted_piece']
@@ -1038,26 +1063,42 @@ class ChessGame(AppState):
                 original_pawn.obj = self.app.loader.loadModel(original_pawn.model)
                 original_pawn.obj.reparentTo(self.piecesNode)
                 original_pawn.obj.setColor(original_pawn.color)
+                self._applyPieceMaterial(original_pawn)
                 original_pawn.obj.setPos(SquarePos(to))
-            # Remove promoted piece
             if hasattr(promoted_piece, 'obj') and promoted_piece.obj:
                 promoted_piece.obj.removeNode()
-        
-        # Restore game state
+
+        # Restore game state flags
         self.enPassantSquare = last_move['en_passant_square']
         self.whiteKingMoved = last_move['white_king_moved']
         self.blackKingMoved = last_move['black_king_moved']
         self.whiteRookMoved = last_move['white_rooks_moved']
         self.blackRookMoved = last_move['black_rooks_moved']
         self.turn = last_move['turn']
-        
-        # Rotate camera back to match the restored turn
+
         self.rotateCamera(instant=True)
-        
-        # Update status
+
+    def undoMove(self):
+        """Undo the last move if possible."""
+        if not self.moveHistory or self.gameOver:
+            return
+
+        move_count = 2 if self.mode == 'pvai' else 1
+        for _ in range(move_count):
+            if not self.moveHistory:
+                break
+            self._undoLastMove()
+
+        # Update status after all undone moves
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
         self.clearHighlights()
         self.updateMoveHistoryDisplay()
+
+        # If PvAI and it becomes AI's turn, schedule AI move
+        if self.mode == 'pvai':
+            ai_color = PIECEBLACK if self.playerColor == 0 else WHITE
+            if self.turn == ai_color and not self.gameOver:
+                self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
 
     def _undoSerializedMove(self, move):
         """Undo a serialized move record loaded from a save file."""
@@ -1114,6 +1155,7 @@ class ChessGame(AppState):
                     moving_piece.obj = self.app.loader.loadModel(moving_piece.model)
                     moving_piece.obj.reparentTo(self.piecesNode)
                     moving_piece.obj.setColor(moving_piece.color)
+                    self._applyPieceMaterial(moving_piece)
                     moving_piece.obj.setPos(SquarePos(fr))
 
         if castling:
@@ -1261,6 +1303,10 @@ class ChessGame(AppState):
             else:
                 self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
 
+            # AI should move immediately after promotion if it is AI's turn
+            if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
+                self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
+
     def onNewGame(self):
         """Reset the board and gameplay state for a new game."""
         # Remove old pieces
@@ -1296,9 +1342,13 @@ class ChessGame(AppState):
         self.gameOver = False
         self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
 
+        # Keep PvAI camera rotation rule consistent after reset
+        self.rotateCameraEnabled = (self.mode != 'pvai')
+
         self.setupBoard()
         self.clearHighlights()
         self.updateMoveHistoryDisplay()
+        self.updateCameraForAspect()
         self.setStatus("Turn: WHITE" if self.turn == WHITE else "Turn: BLACK")
 
     # Include all the other game methods (movePiece, isValidMove, etc.)
@@ -1659,7 +1709,13 @@ class ChessGame(AppState):
         # Don't allow grabbing pieces if the game is over
         if self.gameOver:
             return
-        
+
+        # In PvAI, only the local player can interact with pieces on their turn
+        if self.mode == 'pvai':
+            local_player_color = WHITE if self.playerColor == 0 else PIECEBLACK
+            if self.turn != local_player_color:
+                return
+
         # If mouse is over a square with a piece
         if self.hiSq is not False and self.pieces[self.hiSq]:
             piece = self.pieces[self.hiSq]
@@ -1731,6 +1787,10 @@ class ChessGame(AppState):
                 else:
                     self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
 
+                # If PvAI mode is active and it is AI's turn, queue an AI move.
+                if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
+                    self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
+
         else:
             # Invalid drop - return piece to original position
             self.setStatus("Invalid move")
@@ -1740,6 +1800,59 @@ class ChessGame(AppState):
         self.validMoves = []   # Clear valid moves
         self.hiSq = False      # Clear highlighted square
         self.highlightMoves()  # This will clear highlights since validMoves is empty
+
+    def makeAIMove(self, task):
+        """Simple AI: random legal move for the AI side."""
+        if self.gameOver:
+            return Task.done
+
+        ai_color = PIECEBLACK if self.playerColor == 0 else WHITE
+
+        all_moves = []
+        for square, piece in enumerate(self.pieces):
+            if piece and piece.color == ai_color:
+                for dest in self.getLegalMoves(square):
+                    all_moves.append((square, dest))
+
+        if not all_moves:
+            # No moves available for AI; checkmate or stalemate
+            if self.isKingInCheck(ai_color):
+                self.setStatus(f"CHECKMATE! {'WHITE' if self.playerColor == 1 else 'BLACK'} wins")
+                self.gameOver = True
+            else:
+                self.setStatus("STALEMATE. Draw")
+                self.gameOver = True
+            return Task.done
+
+        fr, to = random.choice(all_moves)
+        self.movePiece(fr, to)
+
+        piece = self.pieces[to]
+        if isinstance(piece, Pawn) and ((piece.color == WHITE and to // 8 == 7) or (piece.color == PIECEBLACK and to // 8 == 0)):
+            self.showPromotionDialog(to)
+            return Task.done
+
+        enemy = PIECEBLACK if self.turn == WHITE else WHITE
+        enemy_in_check = self.isKingInCheck(enemy)
+
+        if self.isCheckmate(enemy):
+            self.gameOver = True
+            winner = 'WHITE' if enemy == PIECEBLACK else 'BLACK'
+            self.setStatus(f"CHECKMATE! {winner} wins")
+            self.clearHighlights()
+            return Task.done
+        if self.isStalemate(enemy):
+            self.gameOver = True
+            self.setStatus("STALEMATE. Draw")
+            self.clearHighlights()
+            return Task.done
+
+        self.switchTurn()
+        self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+        if enemy_in_check:
+            self.setStatus(f"Check to {'WHITE' if enemy == WHITE else 'BLACK'}")
+
+        return Task.done
 
     def highlightMoves(self):
         """
@@ -1791,6 +1904,9 @@ class ChessGame(AppState):
         Parameters:
         - instant: If True, rotate instantly without animation
         """
+        if not getattr(self, 'rotateCameraEnabled', False):
+            return
+
         if instant:
             currentH = self.camPivot.getH()
             self.camPivot.setH(currentH - 180)
@@ -1810,26 +1926,70 @@ class ChessGame(AppState):
             )
             self.orbit.start()  # Start the animation
 
+    def updateCameraForAspect(self):
+        """Keep vertical FOV fixed and adapt horizontal FOV to avoid stretching."""
+        if not self.app or not self.app.win:
+            return
+
+        w = self.app.win.getXSize()
+        h = self.app.win.getYSize()
+        if h <= 0:
+            return
+
+        aspect = w / float(h)
+
+        lens = self.app.cam.node().getLens()
+
+        # Keep vertical FOV steady; adjust aspect ratio instead.
+        v_fov = 45.0
+        lens.setFov(v_fov)
+
+        lens.setAspectRatio(aspect)
+
     def setupLights(self):
         """
-        Set up basic lighting for the 3D scene.
+        Set up improved lighting for the 3D scene.
         """
-        # Create ambient light (soft, even lighting from all directions)
+        # Enable auto-shaders to get lighting and shadows
+        self.app.render.setShaderAuto()
+        if hasattr(self, 'piecesNode'):
+            self.piecesNode.setShaderAuto()
+        if hasattr(self, 'squareRoot'):
+            self.squareRoot.setShaderAuto()
+
+        # Ambient light (base fill)
         ambient = AmbientLight("ambient")
-        ambient.setColor((.8, .8, .8, 1))
+        ambient.setColor((0.35, 0.35, 0.35, 1))
 
-        # Create directional light (like sunlight from a specific direction)
-        directional = DirectionalLight("dir")
-        directional.setDirection(LVector3(0, 45, -45))
-        directional.setColor((0.2, 0.2, 0.2, 1))
+        # Main directional light (strong, shadow-caster)
+        main_dir = DirectionalLight("main_dir")
+        main_dir.setDirection(LVector3(-1, -1, -2))
+        main_dir.setColor((0.9, 0.9, 0.9, 1))
+        main_dir.setShadowCaster(True, 2048, 2048)
+        main_dir.getLens().setNearFar(5, 100)
 
-        # Attach lights to render and store references for cleanup
+        # Secondary directional light (simulated bounce light)
+        fill_dir = DirectionalLight("fill_dir")
+        fill_dir.setDirection(LVector3(1, 2, -0.5))
+        fill_dir.setColor((0.35, 0.35, 0.45, 1))
+
+        # Tertiary light for top fill to reduce harsh black
+        back_dir = DirectionalLight("back_dir")
+        back_dir.setDirection(LVector3(0, 0, -1))
+        back_dir.setColor((0.2, 0.2, 0.25, 1))
+
         self.ambientLightNode = self.app.render.attachNewNode(ambient)
-        self.directionalLightNode = self.app.render.attachNewNode(directional)
-        
-        # Add lights to the scene
+        self.mainDirectionalLightNode = self.app.render.attachNewNode(main_dir)
+        self.fillDirectionalLightNode = self.app.render.attachNewNode(fill_dir)
+        self.backDirectionalLightNode = self.app.render.attachNewNode(back_dir)
+
         self.app.render.setLight(self.ambientLightNode)
-        self.app.render.setLight(self.directionalLightNode)
+        self.app.render.setLight(self.mainDirectionalLightNode)
+        self.app.render.setLight(self.fillDirectionalLightNode)
+        self.app.render.setLight(self.backDirectionalLightNode)
+
+        # Accept lights for shadows
+        self.app.setBackgroundColor(0.08, 0.1, 0.12, 1)
 
 
 class ChessApp(ShowBase):
@@ -1841,9 +2001,17 @@ class ChessApp(ShowBase):
         """
         Initialize the chess application.
         """
+        # Enable MSAA anti-aliasing for smoother edges (default 4x)
+        load_prc_file_data('', 'framebuffer-multisample true\nmultisamples 4\n')
+
         ShowBase.__init__(self)
-        
-        # Set window properties
+        self.render.setAntialias(AntialiasAttrib.MMultisample)
+
+        # Use a vertical FOV baseline and allow width to show more scene instead of stretching
+        self.cam.node().getLens().setFov(45)
+        self.cam.node().getLens().setNearFar(0.1, 1000)
+
+        # Cache state for game mode transitions and consistent UI layout
         props = WindowProperties()
         props.setTitle("Chess Game")
         props.setIconFilename("panda3d-logo.ico")
@@ -1863,7 +2031,7 @@ class ChessApp(ShowBase):
         Set up the skydome background for the 3D scene (persistent across states).
         """
         # Load the skydome model
-        self.skydome = self.loader.loadModel("models/skydome.glb")
+        self.skydome = self.loader.loadModel("models/skydome.bam")
         
         # Scale it up significantly (user mentioned default scale is only 1)
         self.skydome.setScale(50)  # Much larger scale for background
@@ -1930,8 +2098,13 @@ class Piece:
         else:
             self.obj.reparentTo(render) # type: ignore
 
-        # Color the piece
+        # Apply a basic material for improved shading depth
+        mat = Material()
+        mat.setShininess(30.0)
+        mat.setSpecular((0.6, 0.6, 0.6, 1))
+        self.obj.setMaterial(mat, 1)
         self.obj.setColor(color)
+        self.obj.setShaderAuto()
 
         # Position at the correct square
         self.obj.setPos(SquarePos(square))

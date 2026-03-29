@@ -21,12 +21,13 @@ setup(
                 '**/*.glb',
                 '**/*.mp3',
                 '**/*.json',
+                '**/*.bam',
             ],
 
             # Include the OpenGL renderer and OpenAL audio plug-in
             'plugins': [
                 'pandagl',
-                'p3openal_audio',
+                'p3ffmpeg',
             ],
 
             "icons": {
