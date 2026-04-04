@@ -2,6 +2,7 @@ import json
 import os
 from panda3d.core import loadPrcFileData, WindowProperties, AudioManager
 from direct.showbase.ShowBase import ShowBase  # For type hints
+from direct.filter.CommonFilters import CommonFilters
 
 class SettingsManager:
     _instance = None
@@ -19,7 +20,11 @@ class SettingsManager:
             'difficulty': 1,  # 1-5
             'fov': 45.0,
             'fullscreen': False,
-            'board_theme': 'classic'
+            'board_theme': 'classic',
+            'bloom': False,
+            'blur': False,
+            'ambient_occlusion': False,
+            'edge_highlight': False
         }
         self.settings = self.load()
     
@@ -70,3 +75,23 @@ class SettingsManager:
         
         # Board theme must be applied in the game state by reloading board colors.
         # The game state would need a method to listen for this setting change.
+        
+        # Apply advanced shaders via CommonFilters
+        if app and app.win:
+            if not hasattr(self, 'filters'):
+                self.filters = CommonFilters(app.win, app.cam)
+            
+            # Clear existing
+            self.filters.delBloom()
+            self.filters.delBlurSharpen()
+            self.filters.delAmbientOcclusion()
+            self.filters.delCartoonInk()
+            
+            if self.get('bloom', False):
+                self.filters.setBloom(blend=(0, 0, 0, 1), desat=-0.5, intensity=1.0, size="medium")
+            if self.get('blur', False):
+                self.filters.setBlurSharpen(amount=0.5)
+            if self.get('ambient_occlusion', False):
+                self.filters.setAmbientOcclusion(numsamples=16, radius=0.05, amount=2.0, strength=0.01, falloff=0.000002)
+            if self.get('edge_highlight', False):
+                self.filters.setCartoonInk(separation=1)

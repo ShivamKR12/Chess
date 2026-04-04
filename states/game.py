@@ -36,9 +36,6 @@ class ChessGame(AppState):
     
     def initializeGame(self):
         """Initialize the chess game state, including board setup and camera configuration."""
-        # Disable Panda3D's default mouse camera controls.
-        self.app.disableMouse()
-
         # Create a pivot node for camera rotation during turn changes.
         self.camPivot = self.app.render.attachNewNode("camPivot")
         self.camPivot.setPos(0, 0, 0)
@@ -48,7 +45,7 @@ class ChessGame(AppState):
 
         # Position the camera above and behind the board, looking at the center.
         self.app.camera.reparentTo(self.camPivot)
-        self.app.camera.setPos(0, -12, 8)
+        self.app.camera.setPos(0, -14, 10)
         self.app.camera.lookAt(0, 0, 0)
 
         # Set initial camera rotation based on player color
@@ -147,6 +144,10 @@ class ChessGame(AppState):
         if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
             self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
 
+        # Configure a DisplayRegion to prevent 3D rendering from overlapping top UI
+        self.dr = self.app.camNode.getDisplayRegion(0)
+        self.dr.setDimensions(0, 1, 0, 0.85)  # Restrict 3D to the bottom 85% of screen
+
     def returnToMenu(self):
         """Return to the main menu."""
         self.app.showMenu()
@@ -203,6 +204,15 @@ class ChessGame(AppState):
             del self.promotionDialog
         if hasattr(self, 'saveButton'):
             self.saveButton.destroy()
+        
+        # Reset camera to world coordinates and remove pivot
+        if hasattr(self, 'camPivot'):
+            self.app.camera.reparentTo(self.app.render)
+            self.camPivot.removeNode()
+            
+        # Restore full window DisplayRegion for menus
+        if hasattr(self, 'dr'):
+            self.dr.setDimensions(0, 1, 0, 1)
         
         # Stop tasks
         self.app.taskMgr.remove("mouseTask")
@@ -1102,7 +1112,7 @@ class ChessGame(AppState):
             self.camPivot.setH(180)  # Face black side initially
             
         self.app.camera.reparentTo(self.camPivot)
-        self.app.camera.setPos(0, -12, 8)
+        self.app.camera.setPos(0, -14, 10)
         self.app.camera.lookAt(0, 0, 0)
 
         self.enPassantSquare = None
@@ -1447,27 +1457,42 @@ class ChessGame(AppState):
         if self.app.mouseWatcherNode.hasMouse():
             mpos = self.app.mouseWatcherNode.getMouse()
 
-            # Update the collision ray from camera through mouse position
-            self.pickerRay.setFromLens(self.app.camNode, mpos.getX(), mpos.getY())
-
-            # If dragging a piece, update its position to follow mouse
-            if self.dragging is not False:
-                nearPoint = self.app.render.getRelativePoint(self.app.camera, self.pickerRay.getOrigin())
-                nearVec = self.app.render.getRelativeVector(self.app.camera, self.pickerRay.getDirection())
-                # Position piece at Z=0.5 along the mouse ray
-                self.pieces[self.dragging].obj.setPos(
-                    PointAtZ(.5, nearPoint, nearVec)
-                )
-
-            # Perform collision detection on the squares
-            self.picker.traverse(self.squareRoot)
-
-            # If collision detected, get the closest one
-            if self.pq.getNumEntries() > 0:
-                self.pq.sortEntries()
-                i = int(self.pq.getEntry(0).getIntoNode().getTag('square'))
-                self.hiSq = i  # Square under mouse
+            # Convert standard window mouse coordinates to our custom DisplayRegion coordinates
+            if hasattr(self, 'dr'):
+                l, r, b, t = self.dr.getDimensions()
             else:
+                l, r, b, t = 0.0, 1.0, 0.0, 1.0
+                
+            # Mouse position normalized from 0 to 1 relative to the whole window
+            win_x = (mpos.getX() + 1.0) / 2.0
+            win_y = (mpos.getY() + 1.0) / 2.0
+            
+            # Only process 3D picking if the mouse is actually inside the 3D DisplayRegion
+            if l <= win_x <= r and b <= win_y <= t:
+                # Map mouse into the DisplayRegion's internal -1 to 1 coordinate space
+                dr_x = ((win_x - l) / (r - l)) * 2.0 - 1.0
+                dr_y = ((win_y - b) / (t - b)) * 2.0 - 1.0
+                
+                # Update the collision ray from camera through the mapped mouse position
+                self.pickerRay.setFromLens(self.app.camNode, dr_x, dr_y)
+    
+                # If dragging a piece, update its position to follow mouse
+                if self.dragging is not False:
+                    nearPoint = self.app.render.getRelativePoint(self.app.camera, self.pickerRay.getOrigin())
+                    nearVec = self.app.render.getRelativeVector(self.app.camera, self.pickerRay.getDirection())
+                    self.pieces[self.dragging].obj.setPos(PointAtZ(.5, nearPoint, nearVec))
+    
+                # Perform collision detection on the squares
+                self.picker.traverse(self.squareRoot)
+    
+                # If collision detected, get the closest one
+                if self.pq.getNumEntries() > 0:
+                    self.pq.sortEntries()
+                    self.hiSq = int(self.pq.getEntry(0).getIntoNode().getTag('square'))
+                else:
+                    self.hiSq = False
+            else:
+                # Mouse is outside the 3D DisplayRegion (over the top UI)
                 self.hiSq = False
 
         # If not dragging and mouse over a square, highlight it (only if game is not over)
@@ -1750,8 +1775,29 @@ class ChessGame(AppState):
         h = self.app.win.getYSize()
         if h <= 0:
             return
+            
+        # Window aspect ratio for 2D UI elements
+        window_aspect = w / float(h)
+        
+        # Update the top UI frame to dynamically expand across the entire window width
+        if hasattr(self, 'statusFrame'):
+            self.statusFrame['frameSize'] = (-window_aspect, window_aspect, -0.15, 0.15)
+            
+            # Spread buttons symmetrically, keeping them at least 1.0 unit from center
+            spread = max(1.0, window_aspect - 0.335)
+            if hasattr(self, 'restartButton'): self.restartButton.setPos(-spread, 0, -0.09)
+            if hasattr(self, 'resignButton'):  self.resignButton.setPos(-spread/2, 0, -0.09)
+            if hasattr(self, 'undoButton'):    self.undoButton.setPos(0, 0, -0.09)
+            if hasattr(self, 'saveButton'):    self.saveButton.setPos(spread/2, 0, -0.09)
+            if hasattr(self, 'quitButton'):    self.quitButton.setPos(spread, 0, -0.09)
+            
+        # Adjust dimensions if we are using a custom DisplayRegion
+        if hasattr(self, 'dr'):
+            l, r, b, t = self.dr.getDimensions()
+            w = w * (r - l)
+            h = h * (t - b)
 
-        aspect = w / float(h)
+        cam_aspect = w / float(h)
 
         lens = self.app.cam.node().getLens()
 
@@ -1759,7 +1805,7 @@ class ChessGame(AppState):
         v_fov = self.app.settings_mgr.get('fov', 45.0)
         lens.setFov(v_fov)
 
-        lens.setAspectRatio(aspect)
+        lens.setAspectRatio(cam_aspect)
 
     def setupLights(self):
         """

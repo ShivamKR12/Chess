@@ -1,6 +1,6 @@
 import json
 from direct.gui.DirectGui import (
-    DirectFrame, DirectLabel, DirectButton, DirectSlider
+    DirectFrame, DirectLabel, DirectButton, DirectSlider, DirectScrolledFrame
 )
 from states.base_state import AppState
 
@@ -32,161 +32,323 @@ class SettingsState(AppState):
             pos=(0, 0, 0.45)
         )
         
-        y_pos = 0.30
+        # Tab Buttons row
+        tab_y = 0.32
+        self.tab_audio = DirectButton(
+            parent=self.frame, 
+            text="Audio", 
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(-0.45, 0, tab_y), 
+            relief='raised', 
+            command=self.switch_tab, 
+            extraArgs=['audio']
+        )
+        self.tab_visual = DirectButton(
+            parent=self.frame, 
+            text="Visual", 
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(-0.15, 0, tab_y), 
+            relief='raised', 
+            command=self.switch_tab, 
+            extraArgs=['visual']
+        )
+        self.tab_gameplay = DirectButton(
+            parent=self.frame, 
+            text="Gameplay", 
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(0.15, 0, tab_y), 
+            relief='raised', 
+            command=self.switch_tab, 
+            extraArgs=['gameplay']
+        )
+        self.tab_theme = DirectButton(
+            parent=self.frame, 
+            text="Theme", 
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(0.45, 0, tab_y), 
+            relief='raised', 
+            command=self.switch_tab, 
+            extraArgs=['theme']
+        )
+        
+        self.tabs = {
+            'audio': DirectFrame(
+                parent=self.frame, 
+                frameColor=(0,0,0,0), 
+                pos=(0,0,0)
+            ),
+            'visual': DirectFrame(
+                parent=self.frame, 
+                frameColor=(0,0,0,0), 
+                pos=(0,0,0)
+            ),
+            'gameplay': DirectFrame(
+                parent=self.frame, 
+                frameColor=(0,0,0,0), 
+                pos=(0,0,0)
+            ),
+            'theme': DirectFrame(
+                parent=self.frame, 
+                frameColor=(0,0,0,0), 
+                pos=(0,0,0)
+            ),
+        }
+        
         self.vars = {}  # Track UI values
         
-        # SFX Volume slider
         DirectLabel(
-            parent=self.frame,
-            text="SFX Volume :",
-            text_scale=0.06,
+            parent=self.tabs['audio'], 
+            text="SFX Volume :", 
+            text_scale=0.06, 
             text_fg=(0.4, 0.8, 1, 1),
-            text_shadow=(0,0,0,0.8),
-            text_shadowOffset=(0.02, -0.02),
-            frameColor=(0, 0, 0, 0),  # Transparent background
-            pos=(-0.6,0,y_pos)
+            text_shadow=(0,0,0,0.8), 
+            text_shadowOffset=(0.02, -0.02), 
+            frameColor=(0, 0, 0, 0), 
+            pos=(-0.4,0,0.1)
         )
         self.vars['sfx_volume'] = DirectSlider(
-            parent=self.frame,
-            value=self.settings_mgr.get('sfx_volume', 1.0),
+            parent=self.tabs['audio'], 
+            value=self.settings_mgr.get('sfx_volume', 1.0), 
             range=(0,1),
-            scale=0.4,
-            pos=(0,0,y_pos),
-            frameColor=(0.1, 0.1, 0.1, 1),
+            scale=0.4, pos=(0.2,0,0.1), 
+            frameColor=(0.1, 0.1, 0.1, 1), 
             thumb_frameColor=(0.2, 0.6, 0.8, 1),
-            thumb_relief='raised',
-            command=self.on_slider_change, extraArgs=['sfx_volume']
+            thumb_relief='raised', 
+            command=self.on_slider_change, 
+            extraArgs=['sfx_volume']
         )
-        y_pos -= 0.15
         
-        # Graphics quality cycle button
-        self.graphics_btn = DirectButton(
-            parent=self.frame,
-            text=f"Graphics: {self.settings_mgr.get('graphics', 'high').upper()}",
-            text_pos=(0, -0.01),
-            text_scale=0.06,
-            text_fg=(1, 1, 1, 1),
-            text_shadow=(0, 0, 0, 0.8),
-            frameColor=(0.8, 0.6, 0.2, 1),
-            frameSize=(-0.4, 0.4, -0.05, 0.05),
-            pos=(0,0,y_pos),
-            relief='raised',
-            borderWidth=(0.01, 0.01),
-            command=self.cycle_graphics
-        )
-        y_pos -= 0.15
-        
-        # AI Difficulty slider
-        DirectLabel(
-            parent=self.frame,
-            text="AI Difficulty :",
-            text_scale=0.06,
-            text_fg=(1, 0.6, 0.6, 1),
-            text_shadow=(0,0,0,0.8),
-            text_shadowOffset=(0.02, -0.02),
-            frameColor=(0, 0, 0, 0),  # Transparent background
-            pos=(-0.6,0,y_pos)
-        )
-        self.vars['difficulty'] = DirectSlider(
-            parent=self.frame,
-            value=self.settings_mgr.get('difficulty', 1),
-            range=(1,5),
-            scale=0.4,
-            pos=(0,0,y_pos),
-            frameColor=(0.1, 0.1, 0.1, 1),
-            thumb_frameColor=(0.6, 0.3, 0.3, 1),
-            thumb_relief='raised',
-            command=self.on_slider_change, extraArgs=['difficulty']
-        )
-        y_pos -= 0.15
-        
-        # FOV slider
-        DirectLabel(
-            parent=self.frame,
-            text="Camera FOV :",
-            text_scale=0.06,
-            text_fg=(0.6, 1, 0.6, 1),
-            text_shadow=(0,0,0,0.8),
-            text_shadowOffset=(0.02, -0.02),
-            frameColor=(0, 0, 0, 0),  # Transparent background
-            pos=(-0.6,0,y_pos)
-        )
-        self.vars['fov'] = DirectSlider(
-            parent=self.frame,
-            value=self.settings_mgr.get('fov', 45),
-            range=(30,60),
-            scale=0.4,
-            pos=(0,0,y_pos),
-            frameColor=(0.1, 0.1, 0.1, 1),
-            thumb_frameColor=(0.3, 0.6, 0.3, 1),
-            thumb_relief='raised',
-            command=self.on_slider_change, extraArgs=['fov']
-        )
-        y_pos -= 0.15
-        
-        # Board Theme (simple toggle classic/dark for now)
-        self.theme_btn = DirectButton(
-            parent=self.frame,
-            text=f"Theme: {self.settings_mgr.get('board_theme', 'classic').upper()}",
-            text_pos=(0, -0.01),
-            text_scale=0.06,
-            text_fg=(1, 1, 1, 1),
-            text_shadow=(0, 0, 0, 0.8),
-            frameColor=(0.6, 0.4, 0.8, 1),
-            frameSize=(-0.4, 0.4, -0.05, 0.05),
-            pos=(0,0,y_pos),
-            relief='raised',
-            borderWidth=(0.01, 0.01),
-            command=self.cycle_theme
-        )
-        y_pos -= 0.15
-        
-        # Buttons row
         self.test_btn = DirectButton(
-            parent=self.frame,
-            text="Test SFX",
+            parent=self.tabs['audio'], 
+            text="Test SFX", 
             text_pos=(0, -0.01),
-            text_scale=0.05,
-            text_fg=(1,1,1,1),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
             text_shadow=(0,0,0,0.8),
-            frameColor=(0.3, 0.6, 0.3, 1),
-            frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(-0.3,0,y_pos),
+            frameColor=(0.3, 0.6, 0.3, 1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(0,0,-0.1), 
             relief='raised',
             command=self.test_sfx
         )
-        self.defaults_btn = DirectButton(
-            parent=self.frame,
-            text="Defaults",
+        
+        self.graphics_btn = DirectButton(
+            parent=self.tabs['visual'], 
+            text=f"Graphics: {self.settings_mgr.get('graphics', 'high').upper()}",
             text_pos=(0, -0.01),
-            text_scale=0.05,
-            text_fg=(1,1,1,1),
+            text_scale=0.06, 
+            text_fg=(1, 1, 1, 1), 
+            text_shadow=(0, 0, 0, 0.8), 
+            frameColor=(0.8, 0.6, 0.2, 1),
+            frameSize=(-0.4, 0.4, -0.05, 0.05), 
+            pos=(0,0,0.15), 
+            relief='raised', 
+            borderWidth=(0.01, 0.01),
+            command=self.cycle_graphics
+        )
+        DirectLabel(
+            parent=self.tabs['visual'], 
+            text="Camera FOV :", 
+            text_scale=0.06, 
+            text_fg=(0.6, 1, 0.6, 1),
+            text_shadow=(0,0,0,0.8), 
+            text_shadowOffset=(0.02, -0.02), 
+            frameColor=(0, 0, 0, 0), 
+            pos=(-0.4,0,0.0)
+        )
+        self.vars['fov'] = DirectSlider(
+            parent=self.tabs['visual'], 
+            value=self.settings_mgr.get('fov', 45), 
+            range=(30,60), 
+            scale=0.4,
+            pos=(0.2,0,0.0), 
+            frameColor=(0.1, 0.1, 0.1, 1), 
+            thumb_frameColor=(0.3, 0.6, 0.3, 1),
+            thumb_relief='raised', 
+            command=self.on_slider_change, 
+            extraArgs=['fov']
+        )
+        
+        # Advanced shader toggles
+        self.bloom_btn = DirectButton(
+            parent=self.tabs['visual'], 
+            text=f"Bloom: {'ON' if self.settings_mgr.get('bloom', False) else 'OFF'}",
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1, 1, 1, 1), 
+            frameColor=(0.3, 0.4, 0.5, 1),
+            frameSize=(-0.2, 0.2, -0.04, 0.04), 
+            pos=(-0.25, 0, -0.15), relief='raised',
+            command=self.toggle_boolean, 
+            extraArgs=['bloom', 'bloom_btn', 'Bloom']
+        )
+        self.blur_btn = DirectButton(
+            parent=self.tabs['visual'], 
+            text=f"Blur: {'ON' if self.settings_mgr.get('blur', False) else 'OFF'}",
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1, 1, 1, 1), 
+            frameColor=(0.3, 0.4, 0.5, 1),
+            frameSize=(-0.2, 0.2, -0.04, 0.04), 
+            pos=(0.25, 0, -0.15), 
+            relief='raised',
+            command=self.toggle_boolean, 
+            extraArgs=['blur', 'blur_btn', 'Blur']
+        )
+        self.ao_btn = DirectButton(
+            parent=self.tabs['visual'], 
+            text=f"Amb. Occlusion: {'ON' if self.settings_mgr.get('ambient_occlusion', False) else 'OFF'}",
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1, 1, 1, 1), 
+            frameColor=(0.3, 0.4, 0.5, 1),
+            frameSize=(-0.25, 0.25, -0.04, 0.04), 
+            pos=(-0.25, 0, -0.25), 
+            relief='raised',
+            command=self.toggle_boolean, 
+            extraArgs=['ambient_occlusion', 'ao_btn', 'Amb. Occlusion']
+        )
+        self.edge_btn = DirectButton(
+            parent=self.tabs['visual'], 
+            text=f"Edge Highlight: {'ON' if self.settings_mgr.get('edge_highlight', False) else 'OFF'}",
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1, 1, 1, 1), 
+            frameColor=(0.3, 0.4, 0.5, 1),
+            frameSize=(-0.25, 0.25, -0.04, 0.04), 
+            pos=(0.25, 0, -0.25), 
+            relief='raised',
+            command=self.toggle_boolean, 
+            extraArgs=['edge_highlight', 'edge_btn', 'Edge Highlight']
+        )
+
+        DirectLabel(
+            parent=self.tabs['gameplay'], 
+            text="AI Difficulty :", 
+            text_scale=0.06, 
+            text_fg=(1, 0.6, 0.6, 1),
+            text_shadow=(0,0,0,0.8), 
+            text_shadowOffset=(0.02, -0.02), 
+            frameColor=(0, 0, 0, 0), 
+            pos=(-0.4,0,0.1)
+        )
+        self.vars['difficulty'] = DirectSlider(
+            parent=self.tabs['gameplay'], 
+            value=self.settings_mgr.get('difficulty', 1), 
+            range=(1,5), scale=0.4,
+            pos=(0.2,0,0.1), 
+            frameColor=(0.1, 0.1, 0.1, 1), 
+            thumb_frameColor=(0.6, 0.3, 0.3, 1),
+            thumb_relief='raised', 
+            command=self.on_slider_change, 
+            extraArgs=['difficulty']
+        )
+        
+        self.theme_scroll = DirectScrolledFrame(
+            parent=self.tabs['theme'],
+            canvasSize=(-0.35, 0.35, -0.2, 0.1),
+            frameSize=(-0.4, 0.4, -0.2, 0.2),
+            pos=(0, 0, 0.0),
+            frameColor=(0.1, 0.1, 0.1, 0.6),
+            verticalScroll_thumb_frameColor=(0.4, 0.4, 0.4, 1),
+            horizontalScroll_frameSize=(0, 0, 0, 0) # Hide horizontal scrollbar
+        )
+        
+        self.theme_btn = DirectButton(
+            parent=self.theme_scroll.getCanvas(), 
+            text=f"Board Theme: {self.settings_mgr.get('board_theme', 'classic').upper()}",
+            text_pos=(0, -0.01),
+            text_scale=0.06, 
+            text_fg=(1, 1, 1, 1), 
+            text_shadow=(0, 0, 0, 0.8), 
+            frameColor=(0.6, 0.4, 0.8, 1),
+            frameSize=(-0.3, 0.3, -0.05, 0.05), 
+            pos=(0,0,0), 
+            relief='raised', 
+            borderWidth=(0.01, 0.01),
+            command=self.cycle_theme
+        )
+        
+        # Bottom Buttons
+        self.defaults_btn = DirectButton(
+            parent=self.frame, 
+            text="Defaults", 
+            text_pos=(0, -0.01),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
             text_shadow=(0,0,0,0.8),
-            frameColor=(0.5, 0.5, 0.8, 1),
-            frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(0,0,y_pos),
+            frameColor=(0.5, 0.5, 0.8, 1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(-0.2,0,-0.4), 
             relief='raised',
             command=self.load_defaults
         )
         self.back_btn = DirectButton(
-            parent=self.frame,
-            text="Back",
+            parent=self.frame, 
+            text="Back", 
             text_pos=(0, -0.01),
-            text_scale=0.05,
-            text_fg=(1,1,1,1),
+            text_scale=0.05, 
+            text_fg=(1,1,1,1), 
             text_shadow=(0,0,0,0.8),
-            frameColor=(0.6, 0.2, 0.2, 1),
-            frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(0.3,0,y_pos),
+            frameColor=(0.6, 0.2, 0.2, 1), 
+            frameSize=(-0.15, 0.15, -0.04, 0.04), 
+            pos=(0.2,0,-0.4), 
             relief='raised',
             command=self.back_to_menu
         )
+        
+        # Initialize with audio tab active
+        self.switch_tab('audio')
+        
+    def switch_tab(self, tab_name):
+        """Switch between settings tabs and update UI state."""
+        self.active_tab = tab_name
+        
+        # Update tab button colors
+        buttons = {
+            'audio': self.tab_audio,
+            'visual': self.tab_visual,
+            'gameplay': self.tab_gameplay,
+            'theme': self.tab_theme
+        }
+        
+        for name, btn in buttons.items():
+            if name == tab_name:
+                btn['frameColor'] = (0.2, 0.6, 0.8, 1)  # Highlighted blue
+            else:
+                btn['frameColor'] = (0.4, 0.4, 0.4, 1)  # Normal gray
+                
+        # Show/Hide frames
+        for name, frame in self.tabs.items():
+            if name == tab_name:
+                frame.show()
+            else:
+                frame.hide()
     
     def on_slider_change(self, key):
         value = self.vars[key]['value']
         self.settings_mgr.update(key, value)
         self.settings_mgr.apply(self.app)
     
+    def toggle_boolean(self, key, btn_attr, label):
+        current = self.settings_mgr.get(key, False)
+        new_val = not current
+        self.settings_mgr.update(key, new_val)
+        getattr(self, btn_attr)['text'] = f"{label}: {'ON' if new_val else 'OFF'}"
+        self.settings_mgr.apply(self.app)
+
     def cycle_graphics(self):
         levels = ['off', 'low', 'high']
         current = self.settings_mgr.get('graphics', 'high')
@@ -225,6 +387,11 @@ class SettingsState(AppState):
 
         theme_default = self.settings_mgr.defaults.get('board_theme', 'classic')
         self.theme_btn['text'] = f"Theme: {theme_default.upper()}"
+
+        self.bloom_btn['text'] = f"Bloom: {'ON' if self.settings_mgr.defaults.get('bloom') else 'OFF'}"
+        self.blur_btn['text'] = f"Blur: {'ON' if self.settings_mgr.defaults.get('blur') else 'OFF'}"
+        self.ao_btn['text'] = f"Amb. Occlusion: {'ON' if self.settings_mgr.defaults.get('ambient_occlusion') else 'OFF'}"
+        self.edge_btn['text'] = f"Edge Highlight: {'ON' if self.settings_mgr.defaults.get('edge_highlight') else 'OFF'}"
 
         self.settings_mgr.save()
         self.settings_mgr.apply(self.app)
