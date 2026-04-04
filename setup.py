@@ -21,10 +21,17 @@ setup(
                 '**/*.json',
                 '**/*.bam',
             ],
+            
+            # Exclude user-specific files from the packaged executable
+            'exclude_patterns': [
+                'config.json',
+                'saves/*',
+            ],
 
             # Include the OpenGL renderer and OpenAL audio plug-in
             'plugins': [
                 'pandagl',
+                'p3openal_audio',
                 'p3ffmpeg',
             ],
 

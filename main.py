@@ -1,8 +1,10 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import AntialiasAttrib, WindowProperties, load_prc_file_data
 
+from settings import SettingsManager
 from states.menu import MenuState
 from states.game import ChessGame
+from states.settings import SettingsState
 
 
 class ChessApp(ShowBase):
@@ -33,6 +35,10 @@ class ChessApp(ShowBase):
         # Set up the persistent skydome background for the entire app
         self.setupSkydome()
         
+        # Initialize settings manager
+        self.settings_mgr = SettingsManager()
+        self.settings_mgr.apply(self)
+        
         # Initialize state management
         self.currentState = None
         
@@ -44,7 +50,7 @@ class ChessApp(ShowBase):
         Set up the skydome background for the 3D scene (persistent across states).
         """
         # Load the skydome model
-        self.skydome = self.loader.loadModel("models/skydome.bam")
+        self.skydome = self.loader.loadModel("models/cloudy_midday_4k_skydome.bam")
         
         # Scale it up significantly (user mentioned default scale is only 1)
         self.skydome.setScale(50)  # Much larger scale for background
@@ -68,15 +74,25 @@ class ChessApp(ShowBase):
             self.currentState.cleanup()
         self.currentState = MenuState(self)
     
-    def startGame(self, mode="pvp", playerColor=0, difficulty=1):
+    def showSettings(self):
+        """
+        Switch to the settings state.
+        """
+        if self.currentState:
+            self.currentState.cleanup()
+        self.currentState = SettingsState(self)
+    
+    def startGame(self, mode="pvp", playerColor=0, difficulty=None):
         """
         Start a new chess game.
         
         Parameters:
         - mode: Game mode ("pvp" or "pvai")
         - playerColor: Player's color (0 = white, 1 = black)
-        - difficulty: AI difficulty level (1-5)
+        - difficulty: AI difficulty level (1-5) from settings
         """
+        if difficulty is None:
+            difficulty = self.settings_mgr.get('difficulty', 1)
         if self.currentState:
             self.currentState.cleanup()
         self.currentState = ChessGame(self, mode, playerColor, difficulty)

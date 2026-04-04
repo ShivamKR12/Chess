@@ -1,4 +1,7 @@
 import sys
+import os
+import json
+from tkinter import Tk, filedialog
 from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel
 
 from states.base_state import AppState
@@ -45,7 +48,7 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             frameColor=(0.3, 0.6, 0.3, 1),
             frameSize=(-0.3, 0.3, -0.05, 0.05),
-            pos=(0, 0, 0.2),
+            pos=(0, 0, 0.25),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.startPvP
@@ -59,10 +62,25 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             frameColor=(0.6, 0.3, 0.3, 1),
             frameSize=(-0.3, 0.3, -0.05, 0.05),
-            pos=(0, 0, 0.05),
+            pos=(0, 0, 0.1),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.startPvAI
+        )
+        
+        # Add load game button
+        self.loadButton = DirectButton(
+            parent=self.menuFrame,
+            text="Load Game",
+            text_pos=(0, -0.01),
+            text_scale=0.06,
+            text_fg=(1, 1, 1, 1),
+            frameColor=(0.2, 0.6, 0.8, 1),
+            frameSize=(-0.3, 0.3, -0.05, 0.05),
+            pos=(0, 0, -0.05),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
+            command=self.loadGame
         )
         
         # Add color selection buttons
@@ -74,7 +92,7 @@ class MenuState(AppState):
             text_fg=(0, 0, 0, 1),
             frameColor=(0.9, 0.9, 0.9, 1) if self.selectedColor == 0 else (0.7, 0.7, 0.7, 1),
             frameSize=(-0.25, 0.25, -0.04, 0.04),
-            pos=(-0.3, 0, -0.1),
+            pos=(-0.3, 0, -0.2),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.selectColor, extraArgs=[0]
@@ -88,7 +106,7 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             frameColor=(0.2, 0.2, 0.2, 1) if self.selectedColor == 1 else (0.4, 0.4, 0.4, 1),
             frameSize=(-0.25, 0.25, -0.04, 0.04),
-            pos=(0.3, 0, -0.1),
+            pos=(0.3, 0, -0.2),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.selectColor, extraArgs=[1]
@@ -103,7 +121,7 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             frameColor=(0.5, 0.5, 0.5, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(0, 0, -0.3),
+            pos=(0, 0, -0.35),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.showSettings
@@ -118,7 +136,7 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             frameColor=(0.6, 0.2, 0.2, 1),
             frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(0, 0, -0.45),
+            pos=(0, 0, -0.48),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=sys.exit
@@ -142,11 +160,40 @@ class MenuState(AppState):
     
     def startPvAI(self):
         """Start a Player vs AI game."""
-        self.app.startGame(mode="pvai", playerColor=self.selectedColor, difficulty=1)
+        self.app.startGame(mode="pvai", playerColor=self.selectedColor)
+        
+    def loadGame(self):
+        """Prompt user for a save file and load it directly from the menu."""
+        try:
+            root = Tk()
+            root.withdraw()
+            filepath = filedialog.askopenfilename(
+                initialdir="saves",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+            root.destroy()
+        except Exception as e:
+            print(f"Load error: {str(e)}")
+            return
+            
+        if not filepath:
+            return
+            
+        try:
+            with open(filepath, 'r') as f:
+                game_state = json.load(f)
+                
+            # Initialize the corresponding game state
+            self.app.startGame(mode=game_state.get('mode', 'pvp'), playerColor=game_state.get('playerColor', 0), difficulty=game_state.get('difficulty', 1))
+            
+            self.app.currentState.loadGameState(game_state)
+            self.app.currentState.setStatus(f"Game loaded from {os.path.basename(filepath)}")
+        except Exception as e:
+            print(f"Failed to load game: {str(e)}")
     
     def showSettings(self):
-        """Show settings menu (placeholder for now)."""
-        print("Settings menu not implemented yet")
+        """Show settings menu."""
+        self.app.showSettings()
     
     def cleanup(self):
         """Clean up menu UI elements."""
@@ -158,6 +205,8 @@ class MenuState(AppState):
             self.pvpButton.destroy()
         if hasattr(self, 'pvaiButton'):
             self.pvaiButton.destroy()
+        if hasattr(self, 'loadButton'):
+            self.loadButton.destroy()
         if hasattr(self, 'whiteButton'):
             self.whiteButton.destroy()
         if hasattr(self, 'blackButton'):

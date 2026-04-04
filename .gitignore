@@ -1,3 +1,8 @@
 build/
 __pycache__/
+states/__pycache__/
 *.pyc
+To-Be-Used-If-Needed/
+TODO.txt
+config.json
+saves/

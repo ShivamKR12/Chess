@@ -94,16 +94,24 @@ class ChessGame(AppState):
         self.turnText.hide()  # We're using statusLabel for consolidated status display
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
 
+        self.sfx_volume = self.app.settings_mgr.get('sfx_volume', 1.0)
+        
         # Load game sound effects
         self.captureSound = self.app.loader.loadSfx("sounds/capture.mp3")
+        self.captureSound.setVolume(self.sfx_volume)
         self.castleSound = self.app.loader.loadSfx("sounds/castle.mp3")
+        self.castleSound.setVolume(self.sfx_volume)
         self.moveCheckSound = self.app.loader.loadSfx("sounds/move-check.mp3")
+        self.moveCheckSound.setVolume(self.sfx_volume)
         self.moveSelfSound = self.app.loader.loadSfx("sounds/move-self.mp3")
+        self.moveSelfSound.setVolume(self.sfx_volume)
         self.notifySound = self.app.loader.loadSfx("sounds/notify.mp3")
+        self.notifySound.setVolume(self.sfx_volume)
         self.promoteSound = self.app.loader.loadSfx("sounds/promote.mp3")
+        self.promoteSound.setVolume(self.sfx_volume)
 
-        # Bind the escape key to return to menu
-        self.app.accept('escape', self.returnToMenu)
+        # Bind the escape key to prompt quit dialog
+        self.app.accept('escape', self.showQuitDialog)
         
         # Handle window close event to properly exit
         self.app.accept('window-event', self.handleWindowEvent)
@@ -123,6 +131,7 @@ class ChessGame(AppState):
 
         self.hiSq = False  # Square currently under mouse (False if none)
         self.dragging = False  # Square of piece being dragged (False if none)
+        self.selectedSquare = None  # Square of clicked piece (for click-to-move)
 
         # Add a task that runs every frame to handle mouse interaction.
         self.app.taskMgr.add(self.mouseTask, "mouseTask")
@@ -174,8 +183,11 @@ class ChessGame(AppState):
             self.resignButton.destroy()
         if hasattr(self, 'undoButton'):
             self.undoButton.destroy()
-        if hasattr(self, 'menuButton'):
-            self.menuButton.destroy()
+        if hasattr(self, 'quitButton'):
+            self.quitButton.destroy()
+        if hasattr(self, 'quitDialog'):
+            self.quitDialog.cleanup()
+            del self.quitDialog
         if hasattr(self, 'moveHistoryFrame'):
             self.moveHistoryFrame.destroy()
         if hasattr(self, 'moveHistoryLabel'):
@@ -190,8 +202,6 @@ class ChessGame(AppState):
             del self.promotionDialog
         if hasattr(self, 'saveButton'):
             self.saveButton.destroy()
-        if hasattr(self, 'loadButton'):
-            self.loadButton.destroy()
         
         # Stop tasks
         self.app.taskMgr.remove("mouseTask")
@@ -333,7 +343,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.3, 0.6, 0.3, 1),
             frameSize=(-0.25, 0.25, -0.04, 0.04),
-            pos=(-1.05, 0, -0.09),
+            pos=(-1.0, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.onNewGame
@@ -350,7 +360,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.6, 0.3, 0.3, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(-0.6, 0, -0.09),
+            pos=(-0.5, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.showResignDialog
@@ -367,7 +377,7 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.5, 0.5, 0.8, 1),
             frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(-0.25, 0, -0.09),
+            pos=(0.0, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.undoMove
@@ -384,33 +394,16 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.2, 0.6, 0.8, 1),
             frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(0.05, 0, -0.09),
+            pos=(0.5, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.saveGame
         )
         
-        # Load button
-        self.loadButton = DirectButton(
+        # Quit button on the right
+        self.quitButton = DirectButton(
             parent=self.statusFrame,
-            text="Load",
-            text_pos=(0, -0.01),
-            text_scale=0.05,
-            text_fg=(1, 1, 1, 1),
-            text_shadow=(0, 0, 0, 0.8),
-            text_shadowOffset=(0.01, -0.01),
-            frameColor=(0.2, 0.6, 0.8, 1),
-            frameSize=(-0.15, 0.15, -0.04, 0.04),
-            pos=(0.35, 0, -0.09),
-            relief='raised',
-            borderWidth=(0.01, 0.01),
-            command=self.loadGame
-        )
-        
-        # Menu button on the right
-        self.menuButton = DirectButton(
-            parent=self.statusFrame,
-            text="Menu",
+            text="Quit",
             text_pos=(0, -0.01),
             text_scale=0.05,
             text_fg=(1, 1, 1, 1),
@@ -418,10 +411,10 @@ class ChessGame(AppState):
             text_shadowOffset=(0.01, -0.01),
             frameColor=(0.5, 0.5, 0.5, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04),
-            pos=(0.7, 0, -0.09),
+            pos=(1.0, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
-            command=self.returnToMenu
+            command=self.showQuitDialog
         )
         
         # Move history display on the right side (optional, hidden by default)
@@ -478,7 +471,7 @@ class ChessGame(AppState):
         
         # Generate default filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = os.path.join(saves_dir, f"chess_save_{timestamp}.json")
+        default_name = os.path.join(saves_dir, f"chess_{self.mode}_{timestamp}.json")
         
         # Ask user for file location
         try:
@@ -488,7 +481,7 @@ class ChessGame(AppState):
                 initialdir=saves_dir,
                 defaultextension=".json",
                 filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                initialfile=f"chess_save_{timestamp}.json"
+                initialfile=f"chess_{self.mode}_{timestamp}.json"
             )
             root.destroy()
         except Exception as e:
@@ -529,10 +522,21 @@ class ChessGame(AppState):
         try:
             with open(filepath, 'r') as f:
                 game_state = json.load(f)
+            
+            # Prevent loading a save from a different game mode
+            saved_mode = game_state.get('mode', 'pvp')
+            if saved_mode != self.mode:
+                self.setStatus(f"Error: Cannot load {saved_mode.upper()} save in {self.mode.upper()} mode")
+                return
+            
             self._deserializeGameState(game_state)
             self.setStatus(f"Game loaded from {os.path.basename(filepath)}")
         except Exception as e:
             self.setStatus(f"Failed to load: {str(e)}")
+
+    def loadGameState(self, game_state):
+        """Public wrapper to load game state data."""
+        self._deserializeGameState(game_state)
 
     def _serializeGameState(self):
         """Serialize the current game state to a JSON-compatible dictionary."""
@@ -644,6 +648,15 @@ class ChessGame(AppState):
         self.moveNotation = game_state.get('moveNotation', [])
         self.gameOver = False
 
+        # Restore game configuration properties
+        if 'mode' in game_state:
+            self.mode = game_state['mode']
+        if 'playerColor' in game_state:
+            self.playerColor = game_state['playerColor']
+        if 'difficulty' in game_state:
+            self.difficulty = game_state['difficulty']
+        self.rotateCameraEnabled = (self.mode != 'pvai')
+
         # Restore move history
         self.moveHistory = self._deserializeMoveHistory(game_state.get('moveHistory', []))
 
@@ -661,6 +674,21 @@ class ChessGame(AppState):
         self.updateMoveHistoryDisplay()
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
         self.clearHighlights()
+
+        # Stop any ongoing camera rotation
+        if hasattr(self, 'orbit') and self.orbit.isPlaying():
+            self.orbit.pause()
+            
+        # Reset camera orientation to face the correct side
+        if self.turn == WHITE:
+            self.camPivot.setHpr(0, 0, 0)
+        else:
+            self.camPivot.setHpr(180, 0, 0)
+
+        # If PvAI mode is active and it is AI's turn, queue an AI move
+        self.app.taskMgr.remove('aiMoveTask')
+        if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
+            self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
 
     def showResignDialog(self):
         """Show a confirmation dialog for resigning the game."""
@@ -695,6 +723,28 @@ class ChessGame(AppState):
         winner = "BLACK" if self.turn == WHITE else "WHITE"
         self.setStatus(f"RESIGNATION! {winner} wins")
         self.clearHighlights()
+
+    def showQuitDialog(self):
+        """Show a confirmation dialog for quitting to the main menu."""
+        if hasattr(self, 'quitDialog'):
+            return
+            
+        self.quitDialog = DirectDialog(
+            dialogName="quitDialog",
+            text="Are you sure you want to quit to menu?",
+            buttonTextList=["Yes", "No"],
+            buttonValueList=[1, 0],
+            command=self.onQuitConfirm
+        )
+
+    def onQuitConfirm(self, value):
+        """Handle the quit confirmation dialog response."""
+        if value == 1:
+            self.returnToMenu()
+            
+        if hasattr(self, 'quitDialog'):
+            self.quitDialog.cleanup()
+            del self.quitDialog
 
     def _undoLastMove(self):
         """Undo a single move and restore game state for that move."""
@@ -812,6 +862,8 @@ class ChessGame(AppState):
 
         # Update status after all undone moves
         self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+        self.selectedSquare = None
+        self.validMoves = []
         self.clearHighlights()
         self.updateMoveHistoryDisplay()
 
@@ -1060,6 +1112,8 @@ class ChessGame(AppState):
         self.validMoves = []
         self.moveHistory = []
         self.moveNotation = []
+        self.selectedSquare = None
+        self.dragging = False
         self.gameOver = False
         self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
 
@@ -1416,18 +1470,24 @@ class ChessGame(AppState):
                 self.hiSq = False
 
         # If not dragging and mouse over a square, highlight it (only if game is not over)
-        if self.dragging is False and self.hiSq is not False and not self.gameOver:
+        if self.dragging is False and not self.gameOver:
             self.clearHighlights()
-            self.squares[self.hiSq].setColor(HIGHLIGHT)
+            
+            # Re-apply selection highlight and valid moves for click-to-move
+            if self.selectedSquare is not None:
+                self.squares[self.selectedSquare].setColor(YELLOW)
+                self.highlightMoves()
+                
+            # Highlight the square under the mouse
+            if self.hiSq is not False:
+                self.squares[self.hiSq].setColor(HIGHLIGHT)
 
         return Task.cont  # Continue the task
 
     def grabPiece(self):
         """
-        Handle mouse button press - attempt to grab a piece.
+        Handle mouse button press - attempt to grab a piece or execute a click-to-move.
         """
-        
-        # Don't allow grabbing pieces if the game is over
         if self.gameOver:
             return
 
@@ -1437,21 +1497,83 @@ class ChessGame(AppState):
             if self.turn != local_player_color:
                 return
 
-        # If mouse is over a square with a piece
+        # Check if we clicked a valid move for the currently selected piece (click-to-move)
+        if self.selectedSquare is not None and self.hiSq is not False and self.hiSq in self.validMoves:
+            success = self.moveAndProcessTurn(self.selectedSquare, self.hiSq)
+            if not success:
+                if self.pieces[self.selectedSquare] and self.pieces[self.selectedSquare].obj:
+                    self.pieces[self.selectedSquare].obj.setPos(SquarePos(self.selectedSquare))
+            
+            self.selectedSquare = None
+            self.dragging = False
+            self.validMoves = []
+            self.clearHighlights()
+            return
+
+        # Otherwise, check if we clicked a piece to select/drag
         if self.hiSq is not False and self.pieces[self.hiSq]:
             piece = self.pieces[self.hiSq]
-
-            # If it's the current player's piece
             if piece.color == self.turn:
                 self.clearHighlights()
-
-                self.dragging = self.hiSq  # Start dragging this piece
+                self.selectedSquare = self.hiSq
+                self.dragging = self.hiSq
                 self.validMoves = self.getLegalMoves(self.hiSq)
+                self.squares[self.selectedSquare].setColor(YELLOW)
+                self.highlightMoves()
+                return
 
-                # Highlight the selected square in yellow
-                self.squares[self.dragging].setColor(YELLOW)
+        # Clicked an empty square or enemy piece that is not a valid move
+        if self.selectedSquare is not None:
+            if self.pieces[self.selectedSquare] and self.pieces[self.selectedSquare].obj:
+                self.pieces[self.selectedSquare].obj.setPos(SquarePos(self.selectedSquare))
+            self.selectedSquare = None
+            self.dragging = False
+            self.validMoves = []
+            self.clearHighlights()
 
-                self.highlightMoves()  # Show valid move destinations
+    def moveAndProcessTurn(self, fr, to):
+        """Execute a move, handle promotion, checkmate, stalemate, and switch turns."""
+        # Prevent direct king capture (legal move logic should avoid this scenario in real chess).
+        if isinstance(self.pieces[to], King):
+            self.setStatus("Illegal move: cannot capture king")
+            return False
+
+        self.movePiece(fr, to)
+
+        # Check for pawn promotion
+        piece = self.pieces[to]
+        if isinstance(piece, Pawn) and ((piece.color == WHITE and to // 8 == 7) or (piece.color == PIECEBLACK and to // 8 == 0)):
+            self.showPromotionDialog(to)
+            return True
+
+        enemy = PIECEBLACK if self.turn == WHITE else WHITE
+        enemy_in_check = self.isKingInCheck(enemy)
+        black_in_checkmate = self.isCheckmate(PIECEBLACK)
+        white_in_checkmate = self.isCheckmate(WHITE)
+        black_stalemate = self.isStalemate(PIECEBLACK)
+        white_stalemate = self.isStalemate(WHITE)
+
+        if black_in_checkmate or white_in_checkmate:
+            self.gameOver = True
+            winner = "WHITE" if black_in_checkmate else "BLACK"
+            self.setStatus(f"CHECKMATE! {winner} wins")
+            self.clearHighlights()  # Clear all highlights when game ends
+        elif black_stalemate or white_stalemate:
+            self.gameOver = True
+            self.setStatus("STALEMATE. Draw")
+            self.clearHighlights()  # Clear all highlights when game ends
+        else:
+            self.switchTurn()
+            if enemy_in_check:
+                self.setStatus(f"Check to {'BLACK' if enemy == PIECEBLACK else 'WHITE'}")
+            else:
+                self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
+
+            # If PvAI mode is active and it is AI's turn, queue an AI move.
+            if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
+                self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
+                
+        return True
 
     def releasePiece(self):
         """
@@ -1459,68 +1581,36 @@ class ChessGame(AppState):
         """
         if self.dragging is False or self.gameOver:
             self.dragging = False
-            self.validMoves = []
-            self.hiSq = False
-            self.highlightMoves()
             return
 
         piece = self.pieces[self.dragging]
 
+        # If dropped back on the original square (or just a simple click)
+        if self.hiSq == self.dragging:
+            piece.obj.setPos(SquarePos(self.dragging))
+            self.dragging = False
+            # KEEP self.selectedSquare and validMoves intact so click-to-move works
+            return
+
         # If dropped on a valid move square
         if self.hiSq is not False and self.hiSq in self.validMoves:
-            # Prevent direct king capture (legal move logic should avoid this scenario in real chess).
-            if isinstance(self.pieces[self.hiSq], King):
-                self.setStatus("Illegal move: cannot capture king")
+            success = self.moveAndProcessTurn(self.dragging, self.hiSq)
+            if not success:
                 piece.obj.setPos(SquarePos(self.dragging))
-            else:
-                self.movePiece(self.dragging, self.hiSq)
+            
+            self.selectedSquare = None
+            self.dragging = False
+            self.validMoves = []
+            self.clearHighlights()
+            return
 
-            # Check for pawn promotion
-            piece = self.pieces[self.hiSq]
-            if isinstance(piece, Pawn) and ((piece.color == WHITE and self.hiSq // 8 == 7) or (piece.color == PIECEBLACK and self.hiSq // 8 == 0)):
-                self.showPromotionDialog(self.hiSq)
-                self.dragging = False
-                self.validMoves = []
-                self.hiSq = False
-                self.highlightMoves()
-                return
-
-            enemy = PIECEBLACK if self.turn == WHITE else WHITE
-            enemy_in_check = self.isKingInCheck(enemy)
-            black_in_checkmate = self.isCheckmate(PIECEBLACK)
-            white_in_checkmate = self.isCheckmate(WHITE)
-            black_stalemate = self.isStalemate(PIECEBLACK)
-            white_stalemate = self.isStalemate(WHITE)
-
-            if black_in_checkmate or white_in_checkmate:
-                self.gameOver = True
-                winner = "WHITE" if black_in_checkmate else "BLACK"
-                self.setStatus(f"CHECKMATE! {winner} wins")
-                self.clearHighlights()  # Clear all highlights when game ends
-            elif black_stalemate or white_stalemate:
-                self.gameOver = True
-                self.setStatus("STALEMATE. Draw")
-                self.clearHighlights()  # Clear all highlights when game ends
-            else:
-                self.switchTurn()
-                if enemy_in_check:
-                    self.setStatus(f"Check to {'BLACK' if enemy == PIECEBLACK else 'WHITE'}")
-                else:
-                    self.setStatus(f"Turn: {'WHITE' if self.turn == WHITE else 'BLACK'}")
-
-                # If PvAI mode is active and it is AI's turn, queue an AI move.
-                if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
-                    self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
-
-        else:
-            # Invalid drop - return piece to original position
-            self.setStatus("Invalid move")
-            piece.obj.setPos(SquarePos(self.dragging))
-
-        self.dragging = False  # Stop dragging
-        self.validMoves = []   # Clear valid moves
-        self.hiSq = False      # Clear highlighted square
-        self.highlightMoves()  # This will clear highlights since validMoves is empty
+        # Invalid drop - return piece to original position and clear selection
+        self.setStatus("Invalid move")
+        piece.obj.setPos(SquarePos(self.dragging))
+        self.selectedSquare = None
+        self.dragging = False
+        self.validMoves = []
+        self.clearHighlights()
 
     def makeAIMove(self, task):
         """Simple AI: random legal move for the AI side."""
@@ -1579,8 +1669,11 @@ class ChessGame(AppState):
         """
         Highlight all valid move destinations for the current piece.
         """
+        if self.selectedSquare is None:
+            return
+
         for m in self.validMoves:
-            piece = self.pieces[self.dragging]
+            piece = self.pieces[self.selectedSquare]
 
             # Square has enemy piece - red for capture
             if self.pieces[m]:
@@ -1662,7 +1755,7 @@ class ChessGame(AppState):
         lens = self.app.cam.node().getLens()
 
         # Keep vertical FOV steady; adjust aspect ratio instead.
-        v_fov = 45.0
+        v_fov = self.app.settings_mgr.get('fov', 45.0)
         lens.setFov(v_fov)
 
         lens.setAspectRatio(aspect)
@@ -1671,43 +1764,50 @@ class ChessGame(AppState):
         """
         Set up improved lighting for the 3D scene.
         """
-        # Enable auto-shaders to get lighting and shadows
-        self.app.render.setShaderAuto()
-        if hasattr(self, 'piecesNode'):
-            self.piecesNode.setShaderAuto()
-        if hasattr(self, 'squareRoot'):
-            self.squareRoot.setShaderAuto()
-
-        # Ambient light (base fill)
+        graphics = self.app.settings_mgr.get('graphics', 'high')
+        
+        # Enable auto-shaders based on graphics quality
+        if graphics != 'off':
+            self.app.render.setShaderAuto()
+            if hasattr(self, 'piecesNode'):
+                self.piecesNode.setShaderAuto()
+            if hasattr(self, 'squareRoot'):
+                self.squareRoot.setShaderAuto()
+        
+        # Ambient light (always)
         ambient = AmbientLight("ambient")
         ambient.setColor((0.35, 0.35, 0.35, 1))
-
-        # Main directional light (strong, shadow-caster)
-        main_dir = DirectionalLight("main_dir")
-        main_dir.setDirection(LVector3(-1, -1, -2))
-        main_dir.setColor((0.9, 0.9, 0.9, 1))
-        main_dir.setShadowCaster(True, 2048, 2048)
-        main_dir.getLens().setNearFar(5, 100)
-
-        # Secondary directional light (simulated bounce light)
-        fill_dir = DirectionalLight("fill_dir")
-        fill_dir.setDirection(LVector3(1, 2, -0.5))
-        fill_dir.setColor((0.35, 0.35, 0.45, 1))
-
-        # Tertiary light for top fill to reduce harsh black
-        back_dir = DirectionalLight("back_dir")
-        back_dir.setDirection(LVector3(0, 0, -1))
-        back_dir.setColor((0.2, 0.2, 0.25, 1))
-
         self.ambientLightNode = self.app.render.attachNewNode(ambient)
-        self.mainDirectionalLightNode = self.app.render.attachNewNode(main_dir)
-        self.fillDirectionalLightNode = self.app.render.attachNewNode(fill_dir)
-        self.backDirectionalLightNode = self.app.render.attachNewNode(back_dir)
-
         self.app.render.setLight(self.ambientLightNode)
-        self.app.render.setLight(self.mainDirectionalLightNode)
-        self.app.render.setLight(self.fillDirectionalLightNode)
-        self.app.render.setLight(self.backDirectionalLightNode)
-
-        # Accept lights for shadows
+        
+        if graphics == 'high':
+            # Full lights + shadows
+            main_dir = DirectionalLight("main_dir")
+            main_dir.setDirection(LVector3(-1, -1, -2))
+            main_dir.setColor((0.9, 0.9, 0.9, 1))
+            main_dir.setShadowCaster(True, 2048, 2048)
+            main_dir.getLens().setNearFar(5, 100)
+            self.mainDirectionalLightNode = self.app.render.attachNewNode(main_dir)
+            self.app.render.setLight(self.mainDirectionalLightNode)
+            
+            # Fill lights
+            fill_dir = DirectionalLight("fill_dir")
+            fill_dir.setDirection(LVector3(1, 2, -0.5))
+            fill_dir.setColor((0.35, 0.35, 0.45, 1))
+            self.fillDirectionalLightNode = self.app.render.attachNewNode(fill_dir)
+            self.app.render.setLight(self.fillDirectionalLightNode)
+            
+            back_dir = DirectionalLight("back_dir")
+            back_dir.setDirection(LVector3(0, 0, -1))
+            back_dir.setColor((0.2, 0.2, 0.25, 1))
+            self.backDirectionalLightNode = self.app.render.attachNewNode(back_dir)
+            self.app.render.setLight(self.backDirectionalLightNode)
+        elif graphics == 'low':
+            # Basic directional
+            dir_light = DirectionalLight("dir")
+            dir_light.setDirection(LVector3(-1, -1, -1))
+            dir_light.setColor((0.8, 0.8, 0.8, 1))
+            self.mainDirectionalLightNode = self.app.render.attachNewNode(dir_light)
+            self.app.render.setLight(self.mainDirectionalLightNode)
+        
         self.app.setBackgroundColor(0.08, 0.1, 0.12, 1)
