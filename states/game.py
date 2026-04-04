@@ -111,10 +111,10 @@ class ChessGame(AppState):
         self.promoteSound.setVolume(self.sfx_volume)
 
         # Bind the escape key to prompt quit dialog
-        self.app.accept('escape', self.showQuitDialog)
+        self.accept('escape', self.showQuitDialog)
         
         # Handle window close event to properly exit
-        self.app.accept('window-event', self.handleWindowEvent)
+        self.accept('window-event', self.handleWindowEvent)
 
         # Set up lighting for the 3D scene.
         self.setupLights()
@@ -137,11 +137,11 @@ class ChessGame(AppState):
         self.app.taskMgr.add(self.mouseTask, "mouseTask")
 
         # Bind left mouse button press to grab a piece.
-        self.app.accept("mouse1", self.grabPiece)
-        self.app.accept("r", self.onNewGame)
+        self.accept("mouse1", self.grabPiece)
+        self.accept("r", self.onNewGame)
 
         # Bind left mouse button release to release/drop a piece.
-        self.app.accept("mouse1-up", self.releasePiece)
+        self.accept("mouse1-up", self.releasePiece)
 
         # If Player vs AI mode and AI starts, schedule the first AI move
         if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
@@ -153,11 +153,12 @@ class ChessGame(AppState):
     
     def handleWindowEvent(self, window):
         """Handle window events, including resize / close updates."""
-        if window.getProperties().getMinimized():
-            pass  # Window minimized
-        elif window.isClosed():
+        properties = window.getProperties()
+        if not properties.getOpen():
             # Window closed, exit the application
             sys.exit(0)
+        elif properties.getMinimized():
+            pass  # Window minimized
 
         # Update camera lens on resize to avoid horizontal stretch and show more scene in wider windows
         self.updateCameraForAspect()
@@ -213,8 +214,8 @@ class ChessGame(AppState):
                 self.app.render.clearLight(node)
                 node.removeNode()
 
-        # Clear event handlers
-        self.app.ignoreAll()
+        # Call base class cleanup to clear event handlers
+        super().cleanup()
 
     # Copy all the existing game methods from the original Chess class
     def setupBoard(self):

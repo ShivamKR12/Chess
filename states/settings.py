@@ -235,6 +235,7 @@ class SettingsState(AppState):
         self.app.showMenu()
     
     def cleanup(self):
+        super().cleanup()
         if hasattr(self, 'frame'):
             self.frame.destroy()
         # All other widgets are children of the frame and are destroyed with it.

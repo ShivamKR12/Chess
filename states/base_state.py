@@ -1,4 +1,7 @@
-class AppState:
+from direct.showbase.DirectObject import DirectObject
+
+
+class AppState(DirectObject):
     """
     Base class for all application states (Menu, Game, etc.).
     
@@ -12,6 +15,7 @@ class AppState:
         Parameters:
         - app: Reference to the main ChessApp instance
         """
+        super().__init__()
         self.app = app
     
     def cleanup(self):
@@ -19,4 +23,5 @@ class AppState:
         Clean up this state's resources and UI elements.
         Should be overridden by subclasses.
         """
+        self.ignoreAll()
         pass
