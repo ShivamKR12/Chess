@@ -58,10 +58,10 @@ class SettingsManager:
         if app and app.sfxManagerList:
             app.sfxManagerList[0].setVolume(self.get('sfx_volume', 1.0))
         
-        # Graphics MSAA via PRC (runtime effect on new render targets)
+        # ( NOT FOR NOW ! ) # Graphics MSAA via PRC (runtime effect on new render targets)
         msaa_map = {'off': 0, 'low': 2, 'high': 4}
         msaa = msaa_map.get(self.get('graphics', 'high'), 4)
-        loadPrcFileData('', f'framebuffer-multisample true\nmultisamples {msaa}\n')
+        # loadPrcFileData('', f'framebuffer-multisample true\nmultisamples {msaa}\n')
         
         # FOV
         if app and app.cam and app.cam.node().getLens():
@@ -86,6 +86,12 @@ class SettingsManager:
             self.filters.delBlurSharpen()
             self.filters.delAmbientOcclusion()
             self.filters.delCartoonInk()
+            
+            # Apply MSAA directly to the post-processing render buffer
+            if msaa > 0:
+                self.filters.setMSAA(msaa)
+            else:
+                self.filters.delMSAA()
             
             if self.get('bloom', False):
                 self.filters.setBloom(blend=(0, 0, 0, 1), desat=-0.5, intensity=1.0, size="medium")

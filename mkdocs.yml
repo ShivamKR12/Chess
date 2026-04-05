@@ -1,0 +1,21 @@
+site_name: Chess Game Documentation
+site_description: 3D Chess Game built with Panda3D
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Core Components:
+    - Main App: main.md
+    - Constants: constants.md
+    - Settings: settings_manager.md
+    - Pieces: pieces.md
+  - Game States:
+    - Base State: states/base_state.md
+    - Menu State: states/menu.md
+    - Settings State: states/settings_state.md
+    - Game State:
+      - Overview: states/game/overview.md
+      - Board & Interaction: states/game/board_interaction.md
+      - Logic & Rules: states/game/logic.md
+      - UI & Save/Load: states/game/data_and_ui.md

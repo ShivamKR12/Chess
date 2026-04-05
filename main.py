@@ -18,15 +18,15 @@ class ChessApp(ShowBase):
         """
         Initialize the chess application.
         """
-        # Enable MSAA anti-aliasing for smoother edges (default 4x)
-        load_prc_file_data('', 'framebuffer-multisample true\nmultisamples 4\n')
+        # ( NOT FOR NOW ! ) # Enable MSAA anti-aliasing for smoother edges (default 4x)
+        # load_prc_file_data('', 'framebuffer-multisample true\nmultisamples 4\n')
 
         ShowBase.__init__(self)
         
         # Disable Panda3D's default mouse camera controls globally so we can control the camera manually
         self.disableMouse()
         
-        self.render.setAntialias(AntialiasAttrib.MMultisample)
+        # ( NOT FOR NOW ! ) # self.render.setAntialias(AntialiasAttrib.MMultisample)
 
         # Use a vertical FOV baseline and allow width to show more scene instead of stretching
         self.cam.node().getLens().setFov(45)
