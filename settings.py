@@ -61,7 +61,7 @@ class SettingsManager:
         # ( NOT FOR NOW ! ) # Graphics MSAA via PRC (runtime effect on new render targets)
         msaa_map = {'off': 0, 'low': 2, 'high': 4}
         msaa = msaa_map.get(self.get('graphics', 'high'), 4)
-        # loadPrcFileData('', f'framebuffer-multisample true\nmultisamples {msaa}\n')
+        loadPrcFileData('', f'framebuffer-multisample true\nmultisamples {msaa}\n')
         
         # FOV
         if app and app.cam and app.cam.node().getLens():

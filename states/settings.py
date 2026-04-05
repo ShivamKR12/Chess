@@ -403,6 +403,34 @@ class SettingsState(AppState):
     
     def cleanup(self):
         super().cleanup()
+        
+        # Explicitly destroy all direct GUI references to prevent memory leaks
+        if hasattr(self, 'titleLabel'): self.titleLabel.destroy()
+        
+        if hasattr(self, 'tab_audio'): self.tab_audio.destroy()
+        if hasattr(self, 'tab_visual'): self.tab_visual.destroy()
+        if hasattr(self, 'tab_gameplay'): self.tab_gameplay.destroy()
+        if hasattr(self, 'tab_theme'): self.tab_theme.destroy()
+        
+        if hasattr(self, 'test_btn'): self.test_btn.destroy()
+        if hasattr(self, 'graphics_btn'): self.graphics_btn.destroy()
+        if hasattr(self, 'bloom_btn'): self.bloom_btn.destroy()
+        if hasattr(self, 'blur_btn'): self.blur_btn.destroy()
+        if hasattr(self, 'ao_btn'): self.ao_btn.destroy()
+        if hasattr(self, 'edge_btn'): self.edge_btn.destroy()
+        if hasattr(self, 'theme_btn'): self.theme_btn.destroy()
+        if hasattr(self, 'defaults_btn'): self.defaults_btn.destroy()
+        if hasattr(self, 'back_btn'): self.back_btn.destroy()
+        
+        if hasattr(self, 'theme_scroll'): self.theme_scroll.destroy()
+        
+        if hasattr(self, 'vars'):
+            for slider in self.vars.values():
+                slider.destroy()
+                
+        if hasattr(self, 'tabs'):
+            for tab_frame in self.tabs.values():
+                tab_frame.destroy()
+                
         if hasattr(self, 'frame'):
             self.frame.destroy()
-        # All other widgets are children of the frame and are destroyed with it.

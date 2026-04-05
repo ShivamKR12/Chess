@@ -5,7 +5,7 @@ from panda3d.core import (
 )
 from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel, DirectDialog
 from direct.gui.OnscreenText import OnscreenText
-from direct.interval.LerpInterval import LerpHprInterval
+from direct.interval.LerpInterval import LerpHprInterval, LerpPosInterval
 from direct.task.Task import Task
 from tkinter import Tk, filedialog
 from datetime import datetime
@@ -110,8 +110,8 @@ class ChessGame(AppState):
         # Bind the escape key to prompt quit dialog
         self.accept('escape', self.showQuitDialog)
         
-        # Handle window close event to properly exit
-        self.accept('window-event', self.handleWindowEvent)
+        # Listen for aspect ratio changes to update UI scaling dynamically
+        self.accept('aspectRatioChanged', self.updateCameraForAspect)
 
         # Set up lighting for the 3D scene.
         self.setupLights()
@@ -144,25 +144,15 @@ class ChessGame(AppState):
         if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
             self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
 
-        # Configure a DisplayRegion to prevent 3D rendering from overlapping top UI
-        self.dr = self.app.camNode.getDisplayRegion(0)
+        # Safely restrict the main window's DisplayRegion (avoiding CommonFilters off-screen buffer conflicts)
+        self.dr = self.app.main_3d_dr
         self.dr.setDimensions(0, 1, 0, 0.85)  # Restrict 3D to the bottom 85% of screen
+        # Force UI elements to scale to the correct window aspect ratio immediately
+        self.updateCameraForAspect()
 
     def returnToMenu(self):
         """Return to the main menu."""
         self.app.showMenu()
-    
-    def handleWindowEvent(self, window):
-        """Handle window events, including resize / close updates."""
-        properties = window.getProperties()
-        if not properties.getOpen():
-            # Window closed, exit the application
-            sys.exit(0)
-        elif properties.getMinimized():
-            pass  # Window minimized
-
-        # Update camera lens on resize to avoid horizontal stretch and show more scene in wider windows
-        self.updateCameraForAspect()
     
     def cleanup(self):
         """Clean up game resources."""
@@ -204,6 +194,11 @@ class ChessGame(AppState):
             del self.promotionDialog
         if hasattr(self, 'saveButton'):
             self.saveButton.destroy()
+        if hasattr(self, 'historyToggleButton'):
+            self.historyToggleButton.destroy()
+        if hasattr(self, 'drawerInterval') and self.drawerInterval.isPlaying():
+            self.drawerInterval.pause()
+            del self.drawerInterval
         
         # Reset camera to world coordinates and remove pivot
         if hasattr(self, 'camPivot'):
@@ -436,7 +431,22 @@ class ChessGame(AppState):
             relief='flat',
             borderWidth=(0.01, 0.01)
         )
-        self.moveHistoryFrame.hide()
+        
+        self.historyDrawerOpen = False
+        
+        self.historyToggleButton = DirectButton(
+            parent=self.moveHistoryFrame,
+            text="<",
+            text_pos=(0, -0.015),
+            text_scale=0.06,
+            text_fg=(1, 1, 1, 1),
+            frameColor=(0.2, 0.4, 0.6, 0.9),
+            frameSize=(-0.05, 0.05, -0.1, 0.1),
+            pos=(-0.28, 0, 0),
+            relief='raised',
+            borderWidth=(0.01, 0.01),
+            command=self.toggleHistoryDrawer
+        )
 
         self.moveHistoryLabel = DirectLabel(
             parent=self.moveHistoryFrame,
@@ -1009,6 +1019,39 @@ class ChessGame(AppState):
         text = "\n".join(text_lines)
         if hasattr(self, 'moveHistoryLabel'):
             self.moveHistoryLabel['text'] = text
+            
+    def toggleHistoryDrawer(self):
+        """Toggle the move history drawer sliding in and out."""
+        w = self.app.win.getXSize()
+        h = self.app.win.getYSize()
+        window_aspect = w / float(h) if h > 0 else 1.33
+        
+        on_x = window_aspect - 0.25
+        off_x = window_aspect + 0.25
+        
+        if hasattr(self, 'drawerInterval') and self.drawerInterval.isPlaying():
+            self.drawerInterval.pause()
+            
+        if self.historyDrawerOpen:
+            self.drawerInterval = LerpPosInterval(
+                self.moveHistoryFrame,
+                0.3,
+                (off_x, 0, -0.15),
+                blendType='easeInOut'
+            )
+            self.historyToggleButton['text'] = "<"
+            self.historyDrawerOpen = False
+        else:
+            self.drawerInterval = LerpPosInterval(
+                self.moveHistoryFrame,
+                0.3,
+                (on_x, 0, -0.15),
+                blendType='easeInOut'
+            )
+            self.historyToggleButton['text'] = ">"
+            self.historyDrawerOpen = True
+            
+        self.drawerInterval.start()
 
     def showPromotionDialog(self, square):
         """Show a dialog for pawn promotion choice."""
@@ -1493,6 +1536,7 @@ class ChessGame(AppState):
                     self.hiSq = False
             else:
                 # Mouse is outside the 3D DisplayRegion (over the top UI)
+                # Mouse is over the top UI
                 self.hiSq = False
 
         # If not dragging and mouse over a square, highlight it (only if game is not over)
@@ -1790,6 +1834,17 @@ class ChessGame(AppState):
             if hasattr(self, 'undoButton'):    self.undoButton.setPos(0, 0, -0.09)
             if hasattr(self, 'saveButton'):    self.saveButton.setPos(spread/2, 0, -0.09)
             if hasattr(self, 'quitButton'):    self.quitButton.setPos(spread, 0, -0.09)
+            
+        # Update move history frame position
+        if hasattr(self, 'moveHistoryFrame'):
+            on_x = window_aspect - 0.25
+            off_x = window_aspect + 0.25
+            is_animating = hasattr(self, 'drawerInterval') and self.drawerInterval.isPlaying()
+            if not is_animating:
+                if getattr(self, 'historyDrawerOpen', False):
+                    self.moveHistoryFrame.setPos(on_x, 0, -0.15)
+                else:
+                    self.moveHistoryFrame.setPos(off_x, 0, -0.15)
             
         # Adjust dimensions if we are using a custom DisplayRegion
         if hasattr(self, 'dr'):
