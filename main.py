@@ -42,13 +42,13 @@ class ChessApp(ShowBase):
         props.setIconFilename("panda3d-logo.ico")
         base.win.requestProperties(props) # type: ignore
         
-        # Set up the persistent skydome background for the entire app
-        self.setupSkydome()
-        self.setupMenuBackground()
-        
         # Initialize settings manager
         self.settings_mgr = SettingsManager()
         self.settings_mgr.apply(self)
+        
+        # Set up the persistent skydome background for the entire app
+        self.setupSkydome()
+        self.setupMenuBackground()
         
         # Initialize state management
         self.currentState = None
@@ -78,7 +78,8 @@ class ChessApp(ShowBase):
             sq = self.loader.loadModel("models/square")
             sq.reparentTo(self.menuBgRoot)
             sq.setPos(SquarePos(i))
-            sq.setColor(SquareColor(i))
+            sq.setTag('square', str(i))  # Tag it so we can find and recolor it dynamically
+        self.updateMenuBoardTheme()
             
         piece_models = [
             "models/rook", "models/knight", "models/bishop", "models/queen",
@@ -106,6 +107,22 @@ class ChessApp(ShowBase):
         self.bgRotation = self.menuBgRoot.hprInterval(40, (360, 0, 0))
         self.bgRotation.loop()
         self.menuBgRoot.hide()
+        
+    def updateMenuBoardTheme(self):
+        """Dynamically update the menu background board to match the chosen setting."""
+        if not hasattr(self, 'menuBgRoot'): return
+        theme = self.settings_mgr.get('board_theme', 'classic')
+        for sq in self.menuBgRoot.findAllMatches("**/=square"):
+            i = int(sq.getTag('square'))
+            is_dark = (i + ((i // 8) % 2)) % 2 != 0
+            if theme == 'wood':
+                sq.setColor((0.34, 0.2, 0.09, 1) if is_dark else (0.82, 0.7, 0.53, 1))
+            elif theme == 'marble':
+                sq.setColor((0.25, 0.35, 0.35, 1) if is_dark else (0.85, 0.85, 0.9, 1))
+            elif theme == 'dark':
+                sq.setColor((0.15, 0.15, 0.18, 1) if is_dark else (0.45, 0.45, 0.5, 1))
+            else:
+                sq.setColor(SquareColor(i))
     
     def setupSkydome(self):
         """

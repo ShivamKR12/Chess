@@ -222,6 +222,18 @@ class ChessGame(AppState):
         # Call base class cleanup to clear event handlers
         super().cleanup()
 
+    def getSquareColor(self, i):
+        """Return the correct RGB color for a square based on the current theme."""
+        theme = self.app.settings_mgr.get('board_theme', 'classic')
+        is_dark = (i + ((i // 8) % 2)) % 2 != 0
+        if theme == 'wood':
+            return (0.34, 0.2, 0.09, 1) if is_dark else (0.82, 0.7, 0.53, 1)
+        elif theme == 'marble':
+            return (0.25, 0.35, 0.35, 1) if is_dark else (0.85, 0.85, 0.9, 1)
+        elif theme == 'dark':
+            return (0.15, 0.15, 0.18, 1) if is_dark else (0.45, 0.45, 0.5, 1)
+        return SquareColor(i)
+
     # Copy all the existing game methods from the original Chess class
     def setupBoard(self):
         """
@@ -251,8 +263,8 @@ class ChessGame(AppState):
             # Position the square in 3D space.
             sq.setPos(SquarePos(i))
 
-            # Color the square black or white.
-            sq.setColor(SquareColor(i))
+            # Color the square based on the user's active theme.
+            sq.setColor(self.getSquareColor(i))
 
             # Enable collision detection on the square's geometry.
             sq.find("**/polygon").node().setIntoCollideMask(BitMask32.bit(1))
@@ -686,7 +698,7 @@ class ChessGame(AppState):
             sq = self.app.loader.loadModel("models/square")
             sq.reparentTo(self.squareRoot)
             sq.setPos(SquarePos(i))
-            sq.setColor(SquareColor(i))
+            sq.setColor(self.getSquareColor(i))
             sq.find("**/polygon").node().setIntoCollideMask(BitMask32.bit(1))
             sq.find("**/polygon").node().setTag('square', str(i))
             self.squares[i] = sq
@@ -1762,7 +1774,7 @@ class ChessGame(AppState):
         Reset all squares to their normal colors (no highlights).
         """
         for i in range(64):
-            self.squares[i].setColor(SquareColor(i))
+            self.squares[i].setColor(self.getSquareColor(i))
 
         # Highlight checked king square (only if game is not over)
         if hasattr(self, 'checkedKingSquare') and self.checkedKingSquare is not None and not self.gameOver:

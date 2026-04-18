@@ -358,9 +358,9 @@ class SettingsState(AppState):
         self.settings_mgr.apply(self.app)
     
     def cycle_theme(self):
-        themes = ['classic', 'dark']
+        themes = ['classic', 'wood', 'marble', 'dark']
         current = self.settings_mgr.get('board_theme', 'classic')
-        next_theme = themes[(themes.index(current) + 1) % 2]
+        next_theme = themes[(themes.index(current) + 1) % len(themes)]
         self.settings_mgr.update('board_theme', next_theme)
         self.theme_btn['text'] = f"Theme: {next_theme.upper()}"
         self.settings_mgr.apply(self.app)

@@ -73,8 +73,9 @@ class SettingsManager:
             props.setFullscreen(self.get('fullscreen', False))
             app.win.requestProperties(props)
         
-        # Board theme must be applied in the game state by reloading board colors.
-        # The game state would need a method to listen for this setting change.
+        # Update the live-preview board floating in the menu background
+        if app and hasattr(app, 'updateMenuBoardTheme'):
+            app.updateMenuBoardTheme()
         
         # Apply advanced shaders via CommonFilters
         if app and app.win:
