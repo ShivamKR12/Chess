@@ -36,6 +36,7 @@ class MenuState(AppState):
             text_fg=(1, 1, 1, 1),
             text_shadow=(0, 0, 0, 0.8),
             text_shadowOffset=(0.02, -0.02),
+            frameColor=(0, 0, 0, 0),  # Transparent background
             pos=(0, 0, 0.4)
         )
         
