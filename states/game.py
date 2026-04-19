@@ -49,10 +49,12 @@ class ChessGame(AppState):
         self.app.camera.setPos(0, -14, 10)
         self.app.camera.lookAt(0, 0, 0)
 
-        # Set initial camera rotation based on player color
-        # If playing as black, rotate camera 180 degrees to face black side
-        if self.playerColor == 1:  # Playing as black
-            self.camPivot.setH(180)  # Face black side initially
+        # Set initial camera rotation based on game mode and player color
+        # PvP always starts facing White. In PvAI playing as Black, face Black.
+        if self.mode == 'pvp':
+            self.camPivot.setH(0)
+        elif self.playerColor == 1:
+            self.camPivot.setH(180)
 
         # White always moves first in chess
         self.turn = WHITE
@@ -1269,9 +1271,11 @@ class ChessGame(AppState):
         # Reset camera/orientation to initial starting view
         self.camPivot.setHpr(0, 0, 0)
         
-        # Set initial camera rotation based on player color (same as initializeGame)
-        if self.playerColor == 1:  # Playing as black
-            self.camPivot.setH(180)  # Face black side initially
+        # Set initial camera rotation based on game mode and player color
+        if self.mode == 'pvp':
+            self.camPivot.setH(0)
+        elif self.playerColor == 1:
+            self.camPivot.setH(180)
             
         self.app.camera.reparentTo(self.camPivot)
         self.app.camera.setPos(0, -14, 10)
