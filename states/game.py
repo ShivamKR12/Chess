@@ -17,6 +17,7 @@ import random
 from states.base_state import AppState
 from constants import BLACK, WHITE, PIECEBLACK, SquarePos, SquareColor, YELLOW, HIGHLIGHT, PointAtZ
 from pieces import Pawn, Rook, Knight, Bishop, Queen, King
+from ai import get_best_move
 
 
 class ChessGame(AppState):
@@ -1681,20 +1682,19 @@ class ChessGame(AppState):
         self.clearHighlights()
 
     def makeAIMove(self, task):
-        """Simple AI: random legal move for the AI side."""
+        """AI: uses Minimax algorithm to find the best move."""
         if self.gameOver:
             return Task.done
 
-        ai_color = PIECEBLACK if self.playerColor == 0 else WHITE
-
-        all_moves = []
-        for square, piece in enumerate(self.pieces):
-            if piece and piece.color == ai_color:
-                for dest in self.getLegalMoves(square):
-                    all_moves.append((square, dest))
-
-        if not all_moves:
+        # Map difficulty slider (1-5) to Minimax search depth (1-3 or 4)
+        # Depth > 3 can be very slow in pure Python, so we clamp it to prevent freezing
+        depth = min(4, max(1, int(self.difficulty)))
+        
+        best_move = get_best_move(self, depth)
+        
+        if not best_move:
             # No moves available for AI; checkmate or stalemate
+            ai_color = PIECEBLACK if self.playerColor == 0 else WHITE
             if self.isKingInCheck(ai_color):
                 self.setStatus(f"CHECKMATE! {'WHITE' if self.playerColor == 1 else 'BLACK'} wins")
                 self.gameOver = True
@@ -1703,7 +1703,7 @@ class ChessGame(AppState):
                 self.gameOver = True
             return Task.done
 
-        fr, to = random.choice(all_moves)
+        fr, to = best_move
         self.movePiece(fr, to)
 
         piece = self.pieces[to]
