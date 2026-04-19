@@ -734,8 +734,19 @@ class ChessGame(AppState):
             text="Are you sure you want to resign?",
             buttonTextList=["Yes", "No"],
             buttonValueList=[1, 0],
-            command=self.onResignConfirm
+            command=self.onResignConfirm,
+            frameColor=(0.2, 0.4, 0.6, 0.9),
+            relief='groove',
+            borderWidth=(0.02, 0.02),
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            button_text_fg=(1, 1, 1, 1),
+            button_text_shadow=(0, 0, 0, 0.8),
+            button_relief='raised',
+            button_borderWidth=(0.01, 0.01)
         )
+        self.resignDialog.buttonList[0]['frameColor'] = (0.3, 0.6, 0.3, 1)  # Yes (Green)
+        self.resignDialog.buttonList[1]['frameColor'] = (0.6, 0.3, 0.3, 1)  # No (Red)
 
     def onResignConfirm(self, value):
         """Handle the resign confirmation dialog response."""
@@ -767,8 +778,19 @@ class ChessGame(AppState):
             text="Are you sure you want to quit to menu?",
             buttonTextList=["Yes", "No"],
             buttonValueList=[1, 0],
-            command=self.onQuitConfirm
+            command=self.onQuitConfirm,
+            frameColor=(0.2, 0.4, 0.6, 0.9),
+            relief='groove',
+            borderWidth=(0.02, 0.02),
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            button_text_fg=(1, 1, 1, 1),
+            button_text_shadow=(0, 0, 0, 0.8),
+            button_relief='raised',
+            button_borderWidth=(0.01, 0.01)
         )
+        self.quitDialog.buttonList[0]['frameColor'] = (0.3, 0.6, 0.3, 1)  # Yes (Green)
+        self.quitDialog.buttonList[1]['frameColor'] = (0.6, 0.3, 0.3, 1)  # No (Red)
 
     def onQuitConfirm(self, value):
         """Handle the quit confirmation dialog response."""
@@ -1077,8 +1099,22 @@ class ChessGame(AppState):
             buttonTextList=["Queen", "Rook", "Bishop", "Knight"],
             buttonValueList=["Queen", "Rook", "Bishop", "Knight"],
             command=self.onPromotionChoice,
-            extraArgs=[square]
+            extraArgs=[square],
+            frameColor=(0.2, 0.4, 0.6, 0.9),
+            relief='groove',
+            borderWidth=(0.02, 0.02),
+            text_fg=(1, 1, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            button_text_fg=(1, 1, 1, 1),
+            button_text_shadow=(0, 0, 0, 0.8),
+            button_relief='raised',
+            button_borderWidth=(0.01, 0.01)
         )
+        
+        self.promotionDialog.buttonList[0]['frameColor'] = (0.6, 0.4, 0.8, 1)  # Queen (Purple)
+        self.promotionDialog.buttonList[1]['frameColor'] = (0.8, 0.4, 0.4, 1)  # Rook (Red)
+        self.promotionDialog.buttonList[2]['frameColor'] = (0.4, 0.8, 0.4, 1)  # Bishop (Green)
+        self.promotionDialog.buttonList[3]['frameColor'] = (0.2, 0.6, 0.8, 1)  # Knight (Blue)
 
     def onPromotionChoice(self, piece_type, square):
         """Handle the promotion piece selection."""
