@@ -54,8 +54,8 @@ class ChessGame(AppState):
         if self.playerColor == 1:  # Playing as black
             self.camPivot.setH(180)  # Face black side initially
 
-        # Start the game with the selected player's color
-        self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
+        # White always moves first in chess
+        self.turn = WHITE
 
         # Control rotation behavior: disable for PvAI to keep player view fixed
         self.rotateCameraEnabled = (self.mode != 'pvai')
@@ -1220,7 +1220,7 @@ class ChessGame(AppState):
         self.selectedSquare = None
         self.dragging = False
         self.gameOver = False
-        self.turn = WHITE if self.playerColor == 0 else PIECEBLACK
+        self.turn = WHITE
 
         # Keep PvAI camera rotation rule consistent after reset
         self.rotateCameraEnabled = (self.mode != 'pvai')
@@ -1230,6 +1230,11 @@ class ChessGame(AppState):
         self.updateMoveHistoryDisplay()
         self.updateCameraForAspect()
         self.setStatus("Turn: WHITE" if self.turn == WHITE else "Turn: BLACK")
+        
+        # If Player vs AI mode and AI starts, schedule the first AI move
+        self.app.taskMgr.remove('aiMoveTask')
+        if self.mode == 'pvai' and ((self.playerColor == 0 and self.turn == PIECEBLACK) or (self.playerColor == 1 and self.turn == WHITE)):
+            self.app.taskMgr.doMethodLater(0.5, self.makeAIMove, 'aiMoveTask')
 
     # Include all the other game methods (movePiece, isValidMove, etc.)
     # For brevity, I'll copy the key methods here
