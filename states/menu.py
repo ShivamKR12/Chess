@@ -19,6 +19,8 @@ class MenuState(AppState):
     
     def setupMenu(self):
         """Create the main menu UI elements."""
+        self.click_sound = self.app.loader.loadSfx("sounds/clicksoundeffect.mp3")
+
         # Create menu background frame
         self.menuFrame = DirectFrame(
             frameColor=(0.2, 0.4, 0.6, 0.9),  # Semi-transparent blue background
@@ -52,6 +54,7 @@ class MenuState(AppState):
             pos=(0, 0, 0.25),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.startPvP
         )
         
@@ -66,6 +69,7 @@ class MenuState(AppState):
             pos=(0, 0, 0.1),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.startPvAI
         )
         
@@ -81,6 +85,7 @@ class MenuState(AppState):
             pos=(0, 0, -0.05),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.loadGame
         )
         
@@ -96,6 +101,7 @@ class MenuState(AppState):
             pos=(-0.3, 0, -0.2),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.selectColor, extraArgs=[0]
         )
         
@@ -110,6 +116,7 @@ class MenuState(AppState):
             pos=(0.3, 0, -0.2),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.selectColor, extraArgs=[1]
         )
         
@@ -125,6 +132,7 @@ class MenuState(AppState):
             pos=(0, 0, -0.35),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.showSettings
         )
         
@@ -140,6 +148,7 @@ class MenuState(AppState):
             pos=(0, 0, -0.48),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=sys.exit
         )
     

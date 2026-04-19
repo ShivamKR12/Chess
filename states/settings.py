@@ -10,6 +10,8 @@ class SettingsState(AppState):
         self.setup_ui()
     
     def setup_ui(self):
+        self.click_sound = self.app.loader.loadSfx("sounds/clicksoundeffect.mp3")
+
         # Main frame like menu
         self.frame = DirectFrame(
             frameColor=(0.2, 0.4, 0.6, 0.9),  # Semi-transparent blue background
@@ -42,6 +44,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(-0.45, 0, tab_y), 
             relief='raised', 
+            clickSound=self.click_sound,
             command=self.switch_tab, 
             extraArgs=['audio']
         )
@@ -54,6 +57,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(-0.15, 0, tab_y), 
             relief='raised', 
+            clickSound=self.click_sound,
             command=self.switch_tab, 
             extraArgs=['visual']
         )
@@ -66,6 +70,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(0.15, 0, tab_y), 
             relief='raised', 
+            clickSound=self.click_sound,
             command=self.switch_tab, 
             extraArgs=['gameplay']
         )
@@ -78,6 +83,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(0.45, 0, tab_y), 
             relief='raised', 
+            clickSound=self.click_sound,
             command=self.switch_tab, 
             extraArgs=['theme']
         )
@@ -140,6 +146,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(0,0,-0.1), 
             relief='raised',
+            clickSound=self.click_sound,
             command=self.test_sfx
         )
         
@@ -174,6 +181,7 @@ class SettingsState(AppState):
                 pos=(-0.1 + i * 0.25, 0, 0.15), 
                 relief='raised', 
                 borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
                 command=self.select_graphics,
                 extraArgs=[level]
             )
@@ -213,6 +221,7 @@ class SettingsState(AppState):
             frameSize=(-0.2, 0.2, -0.04, 0.04), 
             pos=(-0.40, 0, -0.20), 
             relief='raised',
+            clickSound=self.click_sound,
             command=self.toggle_boolean, 
             extraArgs=['bloom', 'bloom_btn', 'Bloom']
         )
@@ -226,6 +235,7 @@ class SettingsState(AppState):
             frameSize=(-0.2, 0.2, -0.04, 0.04), 
             pos=(0, 0, -0.20), 
             relief='raised',
+            clickSound=self.click_sound,
             command=self.toggle_boolean, 
             extraArgs=['blur', 'blur_btn', 'Blur']
         )
@@ -239,6 +249,7 @@ class SettingsState(AppState):
             frameSize=(-0.2, 0.2, -0.04, 0.04), 
             pos=(0.40, 0, -0.20), 
             relief='raised',
+            clickSound=self.click_sound,
             command=self.toggle_boolean, 
             extraArgs=['hdr', 'hdr_btn', 'HDR']
         )
@@ -295,6 +306,7 @@ class SettingsState(AppState):
                 pos=(0, 0, 0.0 - i * 0.12), 
                 relief='raised', 
                 borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
                 command=self.select_theme,
                 extraArgs=[theme]
             )
@@ -312,6 +324,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(-0.2,0,-0.4), 
             relief='raised',
+            clickSound=self.click_sound,
             command=self.load_defaults
         )
         self.back_btn = DirectButton(
@@ -325,6 +338,7 @@ class SettingsState(AppState):
             frameSize=(-0.15, 0.15, -0.04, 0.04), 
             pos=(0.2,0,-0.4), 
             relief='raised',
+            clickSound=self.click_sound,
             command=self.back_to_menu
         )
         

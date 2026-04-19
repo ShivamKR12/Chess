@@ -109,6 +109,8 @@ class ChessGame(AppState):
         self.promoteSound.setVolume(self.sfx_volume)
         self.illegalSound = self.app.loader.loadSfx("sounds/illegal.mp3")
         self.illegalSound.setVolume(self.sfx_volume)
+        self.click_sound = self.app.loader.loadSfx("sounds/clicksoundeffect.mp3")
+        self.click_sound.setVolume(self.sfx_volume)
 
         # Bind the escape key to prompt quit dialog
         self.accept('escape', self.showQuitDialog)
@@ -375,6 +377,7 @@ class ChessGame(AppState):
             pos=(-1.0, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.onNewGame
         )
         
@@ -392,6 +395,7 @@ class ChessGame(AppState):
             pos=(-0.5, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.showResignDialog
         )
         
@@ -409,6 +413,7 @@ class ChessGame(AppState):
             pos=(0.0, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.undoMove
         )
         
@@ -426,6 +431,7 @@ class ChessGame(AppState):
             pos=(0.5, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.saveGame
         )
         
@@ -443,6 +449,7 @@ class ChessGame(AppState):
             pos=(1.0, 0, -0.09),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.showQuitDialog
         )
         
@@ -468,6 +475,7 @@ class ChessGame(AppState):
             pos=(-0.37, 0, 0),
             relief='raised',
             borderWidth=(0.01, 0.01),
+            clickSound=self.click_sound,
             command=self.toggleHistoryDrawer
         )
 
@@ -789,7 +797,8 @@ class ChessGame(AppState):
             button_text_fg=(1, 1, 1, 1),
             button_text_shadow=(0, 0, 0, 0.8),
             button_relief='raised',
-            button_borderWidth=(0.01, 0.01)
+            button_borderWidth=(0.01, 0.01),
+            button_clickSound=self.click_sound
         )
         self.resignDialog.buttonList[0]['frameColor'] = (0.3, 0.6, 0.3, 1)  # Yes (Green)
         self.resignDialog.buttonList[1]['frameColor'] = (0.6, 0.3, 0.3, 1)  # No (Red)
@@ -833,7 +842,8 @@ class ChessGame(AppState):
             button_text_fg=(1, 1, 1, 1),
             button_text_shadow=(0, 0, 0, 0.8),
             button_relief='raised',
-            button_borderWidth=(0.01, 0.01)
+            button_borderWidth=(0.01, 0.01),
+            button_clickSound=self.click_sound
         )
         self.quitDialog.buttonList[0]['frameColor'] = (0.3, 0.6, 0.3, 1)  # Yes (Green)
         self.quitDialog.buttonList[1]['frameColor'] = (0.6, 0.3, 0.3, 1)  # No (Red)
@@ -1168,7 +1178,8 @@ class ChessGame(AppState):
             button_text_fg=(1, 1, 1, 1),
             button_text_shadow=(0, 0, 0, 0.8),
             button_relief='raised',
-            button_borderWidth=(0.01, 0.01)
+            button_borderWidth=(0.01, 0.01),
+            button_clickSound=self.click_sound
         )
         
         self.promotionDialog.buttonList[0]['frameColor'] = (0.6, 0.4, 0.8, 1)  # Queen (Purple)
