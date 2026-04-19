@@ -144,20 +144,42 @@ class SettingsState(AppState):
             command=self.test_sfx
         )
         
-        self.graphics_btn = DirectButton(
+        DirectLabel(
             parent=self.tabs['visual'], 
-            text=f"Graphics: {self.settings_mgr.get('graphics', 'high').upper()}",
-            text_pos=(0, -0.01),
+            text="Graphics :", 
             text_scale=0.06, 
-            text_fg=(1, 1, 1, 1), 
-            text_shadow=(0, 0, 0, 0.8), 
-            frameColor=(0.8, 0.6, 0.2, 1),
-            frameSize=(-0.4, 0.4, -0.05, 0.05), 
-            pos=(0,0,0.15), 
-            relief='raised', 
-            borderWidth=(0.01, 0.01),
-            command=self.cycle_graphics
+            text_fg=(0.8, 0.6, 0.2, 1),
+            text_shadow=(0,0,0,0.8), 
+            text_shadowOffset=(0.02, -0.02), 
+            frameColor=(0, 0, 0, 0), 
+            pos=(-0.4,0,0.15)
         )
+        
+        self.graphics_buttons = {}
+        graphics_levels = ['off', 'low', 'high']
+        current_graphics = self.settings_mgr.get('graphics', 'high')
+        
+        for i, level in enumerate(graphics_levels):
+            is_selected = (level == current_graphics)
+            btn_color = (0.8, 0.6, 0.2, 1) if is_selected else (0.3, 0.4, 0.5, 1)
+            
+            btn = DirectButton(
+                parent=self.tabs['visual'], 
+                text=level.upper(),
+                text_pos=(0, -0.01),
+                text_scale=0.05, 
+                text_fg=(1, 1, 1, 1), 
+                text_shadow=(0, 0, 0, 0.8), 
+                frameColor=btn_color,
+                frameSize=(-0.1, 0.1, -0.04, 0.04), 
+                pos=(-0.1 + i * 0.25, 0, 0.15), 
+                relief='raised', 
+                borderWidth=(0.01, 0.01),
+                command=self.select_graphics,
+                extraArgs=[level]
+            )
+            self.graphics_buttons[level] = btn
+            
         DirectLabel(
             parent=self.tabs['visual'], 
             text="Camera FOV :", 
@@ -258,7 +280,7 @@ class SettingsState(AppState):
         
         self.theme_scroll = DirectScrolledFrame(
             parent=self.tabs['theme'],
-            canvasSize=(-0.35, 0.35, -0.2, 0.1),
+            canvasSize=(-0.35, 0.35, -0.45, 0.1),
             frameSize=(-0.4, 0.4, -0.2, 0.2),
             pos=(0, 0, 0.0),
             frameColor=(0.1, 0.1, 0.1, 0.6),
@@ -266,20 +288,30 @@ class SettingsState(AppState):
             horizontalScroll_frameSize=(0, 0, 0, 0) # Hide horizontal scrollbar
         )
         
-        self.theme_btn = DirectButton(
-            parent=self.theme_scroll.getCanvas(), 
-            text=f"Board Theme: {self.settings_mgr.get('board_theme', 'classic').upper()}",
-            text_pos=(0, -0.01),
-            text_scale=0.06, 
-            text_fg=(1, 1, 1, 1), 
-            text_shadow=(0, 0, 0, 0.8), 
-            frameColor=(0.6, 0.4, 0.8, 1),
-            frameSize=(-0.3, 0.3, -0.05, 0.05), 
-            pos=(0,0,0), 
-            relief='raised', 
-            borderWidth=(0.01, 0.01),
-            command=self.cycle_theme
-        )
+        self.theme_buttons = {}
+        themes = ['classic', 'wood', 'marble', 'dark']
+        current_theme = self.settings_mgr.get('board_theme', 'classic')
+        
+        for i, theme in enumerate(themes):
+            is_selected = (theme == current_theme)
+            btn_color = (0.6, 0.8, 0.4, 1) if is_selected else (0.3, 0.4, 0.5, 1)
+            
+            btn = DirectButton(
+                parent=self.theme_scroll.getCanvas(), 
+                text=theme.capitalize(),
+                text_pos=(0, -0.01),
+                text_scale=0.06, 
+                text_fg=(1, 1, 1, 1), 
+                text_shadow=(0, 0, 0, 0.8), 
+                frameColor=btn_color,
+                frameSize=(-0.3, 0.3, -0.05, 0.05), 
+                pos=(0, 0, 0.0 - i * 0.12), 
+                relief='raised', 
+                borderWidth=(0.01, 0.01),
+                command=self.select_theme,
+                extraArgs=[theme]
+            )
+            self.theme_buttons[theme] = btn
         
         # Bottom Buttons
         self.defaults_btn = DirectButton(
@@ -312,6 +344,20 @@ class SettingsState(AppState):
         # Initialize with audio tab active
         self.switch_tab('audio')
         
+        # Bind scroll wheel
+        self.accept('wheel_up', self.scroll_up)
+        self.accept('wheel_down', self.scroll_down)
+        
+    def scroll_up(self):
+        if getattr(self, 'active_tab', None) == 'theme' and hasattr(self, 'theme_scroll'):
+            val = self.theme_scroll.verticalScroll['value']
+            self.theme_scroll.verticalScroll['value'] = max(0.0, val - 0.2)
+            
+    def scroll_down(self):
+        if getattr(self, 'active_tab', None) == 'theme' and hasattr(self, 'theme_scroll'):
+            val = self.theme_scroll.verticalScroll['value']
+            self.theme_scroll.verticalScroll['value'] = min(1.0, val + 0.2)
+
     def switch_tab(self, tab_name):
         """Switch between settings tabs and update UI state."""
         self.active_tab = tab_name
@@ -349,20 +395,26 @@ class SettingsState(AppState):
         getattr(self, btn_attr)['text'] = f"{label}: {'ON' if new_val else 'OFF'}"
         self.settings_mgr.apply(self.app)
 
-    def cycle_graphics(self):
-        levels = ['off', 'low', 'high']
-        current = self.settings_mgr.get('graphics', 'high')
-        next_level = levels[(levels.index(current) + 1) % 3]
-        self.settings_mgr.update('graphics', next_level)
-        self.graphics_btn['text'] = f"Graphics: {next_level.upper()}"
+    def select_graphics(self, level):
+        self.settings_mgr.update('graphics', level)
+        
+        for l, btn in self.graphics_buttons.items():
+            if l == level:
+                btn['frameColor'] = (0.8, 0.6, 0.2, 1)  # Highlighted
+            else:
+                btn['frameColor'] = (0.3, 0.4, 0.5, 1)  # Unselected
+                
         self.settings_mgr.apply(self.app)
     
-    def cycle_theme(self):
-        themes = ['classic', 'wood', 'marble', 'dark']
-        current = self.settings_mgr.get('board_theme', 'classic')
-        next_theme = themes[(themes.index(current) + 1) % len(themes)]
-        self.settings_mgr.update('board_theme', next_theme)
-        self.theme_btn['text'] = f"Theme: {next_theme.upper()}"
+    def select_theme(self, theme):
+        self.settings_mgr.update('board_theme', theme)
+        
+        for t, btn in self.theme_buttons.items():
+            if t == theme:
+                btn['frameColor'] = (0.6, 0.8, 0.4, 1)  # Highlighted (light green)
+            else:
+                btn['frameColor'] = (0.3, 0.4, 0.5, 1)  # Unselected (blueish gray)
+                
         self.settings_mgr.apply(self.app)
     
     def test_sfx(self):
@@ -383,10 +435,18 @@ class SettingsState(AppState):
 
         # Buttons
         graphics_default = self.settings_mgr.defaults.get('graphics', 'high')
-        self.graphics_btn['text'] = f"Graphics: {graphics_default.upper()}"
+        for l, btn in self.graphics_buttons.items():
+            if l == graphics_default:
+                btn['frameColor'] = (0.8, 0.6, 0.2, 1)
+            else:
+                btn['frameColor'] = (0.3, 0.4, 0.5, 1)
 
         theme_default = self.settings_mgr.defaults.get('board_theme', 'classic')
-        self.theme_btn['text'] = f"Theme: {theme_default.upper()}"
+        for t, btn in self.theme_buttons.items():
+            if t == theme_default:
+                btn['frameColor'] = (0.6, 0.8, 0.4, 1)
+            else:
+                btn['frameColor'] = (0.3, 0.4, 0.5, 1)
 
         self.bloom_btn['text'] = f"Bloom: {'ON' if self.settings_mgr.defaults.get('bloom') else 'OFF'}"
         self.blur_btn['text'] = f"Blur: {'ON' if self.settings_mgr.defaults.get('blur') else 'OFF'}"
@@ -413,12 +473,16 @@ class SettingsState(AppState):
         if hasattr(self, 'tab_theme'): self.tab_theme.destroy()
         
         if hasattr(self, 'test_btn'): self.test_btn.destroy()
-        if hasattr(self, 'graphics_btn'): self.graphics_btn.destroy()
+        if hasattr(self, 'graphics_buttons'):
+            for btn in self.graphics_buttons.values():
+                btn.destroy()
         if hasattr(self, 'bloom_btn'): self.bloom_btn.destroy()
         if hasattr(self, 'blur_btn'): self.blur_btn.destroy()
         if hasattr(self, 'ao_btn'): self.ao_btn.destroy()
         if hasattr(self, 'edge_btn'): self.edge_btn.destroy()
-        if hasattr(self, 'theme_btn'): self.theme_btn.destroy()
+        if hasattr(self, 'theme_buttons'):
+            for btn in self.theme_buttons.values():
+                btn.destroy()
         if hasattr(self, 'defaults_btn'): self.defaults_btn.destroy()
         if hasattr(self, 'back_btn'): self.back_btn.destroy()
         
