@@ -1,9 +1,9 @@
 from panda3d.core import (
     BitMask32, CollisionNode, CollisionRay, CollisionHandlerQueue, 
     Material, CollisionTraverser, TextNode, LVector3, AmbientLight, 
-    DirectionalLight
+    DirectionalLight, OmniBoundingVolume
 )
-from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel, DirectDialog
+from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel, DirectDialog, DirectScrolledFrame
 from direct.gui.OnscreenText import OnscreenText
 from direct.interval.LerpInterval import LerpHprInterval, LerpPosInterval
 from direct.task.Task import Task
@@ -186,8 +186,14 @@ class ChessGame(AppState):
         if hasattr(self, 'quitDialog'):
             self.quitDialog.cleanup()
             del self.quitDialog
-        if hasattr(self, 'moveHistoryLabel'):
-            self.moveHistoryLabel.destroy()
+        if hasattr(self, 'historyHeader'):
+            self.historyHeader.destroy()
+        if hasattr(self, 'moveHistoryWhiteLabel'):
+            self.moveHistoryWhiteLabel.destroy()
+        if hasattr(self, 'moveHistoryBlackLabel'):
+            self.moveHistoryBlackLabel.destroy()
+        if hasattr(self, 'historyScroll'):
+            self.historyScroll.destroy()
         if hasattr(self, 'historyToggleButton'):
             self.historyToggleButton.destroy()
         if hasattr(self, 'moveHistoryFrame'):
@@ -440,13 +446,13 @@ class ChessGame(AppState):
             command=self.showQuitDialog
         )
         
-        # Move history display on the right side (optional, hidden by default)
+        # Move history display on the right side
         self.moveHistoryFrame = DirectFrame(
-            frameColor=(0.05, 0.05, 0.06, 0.8),
-            frameSize=(-0.23, 0.23, -0.85, 0.85),
+            frameColor=(0.2, 0.4, 0.6, 0.9),  # Match the vibrant groove theme
+            frameSize=(-0.32, 0.32, -0.85, 0.85),
             pos=(1.1, 0, -0.15),
-            relief='flat',
-            borderWidth=(0.01, 0.01)
+            relief='groove',
+            borderWidth=(0.02, 0.02)
         )
         
         self.historyDrawerOpen = False
@@ -457,27 +463,62 @@ class ChessGame(AppState):
             text_pos=(0, -0.015),
             text_scale=0.06,
             text_fg=(1, 1, 1, 1),
-            frameColor=(0.2, 0.4, 0.6, 0.9),
+            frameColor=(0.6, 0.4, 0.8, 1),  # Vibrant purple for the tab
             frameSize=(-0.05, 0.05, -0.1, 0.1),
-            pos=(-0.28, 0, 0),
+            pos=(-0.37, 0, 0),
             relief='raised',
             borderWidth=(0.01, 0.01),
             command=self.toggleHistoryDrawer
         )
 
-        self.moveHistoryLabel = DirectLabel(
+        self.historyHeader = DirectLabel(
             parent=self.moveHistoryFrame,
+            text="White         Black",
+            text_fg=(1, 0.9, 0.3, 1),  # Gold/Yellow
+            text_scale=0.06,
+            text_shadow=(0, 0, 0, 0.8),
+            frameColor=(0, 0, 0, 0),
+            pos=(-0.05, 0, 0.75)
+        )
+        
+        self.historyScroll = DirectScrolledFrame(
+            parent=self.moveHistoryFrame,
+            frameSize=(-0.3, 0.3, -0.8, 0.7),
+            canvasSize=(-0.28, 0.28, -0.8, 0.7),
+            frameColor=(0.1, 0.1, 0.15, 0.6),  # Darker semi-transparent background
+            verticalScroll_thumb_frameColor=(0.2, 0.6, 0.8, 1),  # Blue scroll thumb
+            horizontalScroll_frameSize=(0, 0, 0, 0),  # Hide horizontal scrollbar
+            relief='sunken',
+            borderWidth=(0.01, 0.01)
+        )
+        
+        self.moveHistoryWhiteLabel = DirectLabel(
+            parent=self.historyScroll.getCanvas(),
             text="",
             text_fg=(1, 1, 1, 1),
             text_scale=0.05,
             text_align=TextNode.ALeft,
             text_shadow=(0, 0, 0, 0.8),
             text_shadowOffset=(0.01, -0.01),
-            text_wordwrap=15,
-            textMayChange=1,
             frameColor=(0, 0, 0, 0),
-            pos=(-0.2, 0, 0.7)
+            pos=(-0.26, 0, 0.65)
         )
+        self.moveHistoryWhiteLabel.node().setBounds(OmniBoundingVolume())
+        self.moveHistoryWhiteLabel.node().setFinal(True)
+        
+        self.moveHistoryBlackLabel = DirectLabel(
+            parent=self.historyScroll.getCanvas(),
+            text="",
+            text_fg=(0.7, 0.9, 1.0, 1),  # Light blue/cyan for black moves to differentiate
+            text_scale=0.05,
+            text_align=TextNode.ALeft,
+            text_shadow=(0, 0, 0, 0.8),
+            text_shadowOffset=(0.01, -0.01),
+            frameColor=(0, 0, 0, 0),
+            pos=(0.04, 0, 0.65)
+        )
+        self.moveHistoryBlackLabel.node().setBounds(OmniBoundingVolume())
+        self.moveHistoryBlackLabel.node().setFinal(True)
 
     def setStatus(self, text):
         """Update the status text and keep the main turn text in sync."""
@@ -1047,17 +1088,31 @@ class ChessGame(AppState):
 
     def updateMoveHistoryDisplay(self):
         """Update the move history display with current moves."""
-        # Format as numbered moves: 1. e4 e5  2. Nf3 Nc6 etc.
-        text_lines = []
+        white_text_lines = []
+        black_text_lines = []
+        
         for i in range(0, len(self.moveNotation), 2):
             move_num = (i // 2) + 1
             white_move = self.moveNotation[i] if i < len(self.moveNotation) else ""
             black_move = self.moveNotation[i+1] if i+1 < len(self.moveNotation) else ""
-            text_lines.append(f"{move_num}. {white_move} {black_move}")
         
-        text = "\n".join(text_lines)
-        if hasattr(self, 'moveHistoryLabel'):
-            self.moveHistoryLabel['text'] = text
+            white_text_lines.append(f"{move_num}. {white_move}")
+            black_text_lines.append(f"{black_move}")
+        
+        if hasattr(self, 'moveHistoryWhiteLabel') and hasattr(self, 'moveHistoryBlackLabel'):
+            self.moveHistoryWhiteLabel['text'] = "\n".join(white_text_lines)
+            self.moveHistoryBlackLabel['text'] = "\n".join(black_text_lines)
+            
+            # Dynamically resize the canvas so the scrollbar activates
+            num_lines = len(white_text_lines)
+            line_height = 0.055
+            total_height = num_lines * line_height
+            
+            if hasattr(self, 'historyScroll'):
+                bottom = min(-0.8, 0.7 - total_height - 0.1)
+                self.historyScroll['canvasSize'] = (-0.28, 0.28, bottom, 0.7)
+                # Auto-scroll to the bottom as new moves are made
+                self.historyScroll.verticalScroll['value'] = 1.0
             
     def toggleHistoryDrawer(self):
         """Toggle the move history drawer sliding in and out."""
@@ -1065,8 +1120,8 @@ class ChessGame(AppState):
         h = self.app.win.getYSize()
         window_aspect = w / float(h) if h > 0 else 1.33
         
-        on_x = window_aspect - 0.25
-        off_x = window_aspect + 0.25
+        on_x = window_aspect - 0.34
+        off_x = window_aspect + 0.32
         
         if hasattr(self, 'drawerInterval') and self.drawerInterval.isPlaying():
             self.drawerInterval.pause()
@@ -1447,10 +1502,7 @@ class ChessGame(AppState):
 
         # If there is no king, treat as checkmated for that color (game over scenario)
         if kingSquare is None:
-            self.checkedKingSquare = None
             return True
-
-        self.checkedKingSquare = kingSquare
 
         state = {
             'en_passant_square': self.enPassantSquare,
@@ -1467,7 +1519,6 @@ class ChessGame(AppState):
                 if kingSquare in p.get_pseudo_legal_moves(self.pieces, i, state):
                     return True
 
-        self.checkedKingSquare = None
         return False
 
     def isCheckmate(self, color):
@@ -1773,9 +1824,15 @@ class ChessGame(AppState):
         for i in range(64):
             self.squares[i].setColor(self.getSquareColor(i))
 
-        # Highlight checked king square (only if game is not over)
-        if hasattr(self, 'checkedKingSquare') and self.checkedKingSquare is not None and not self.gameOver:
-            self.squares[self.checkedKingSquare].setColor((1, 0, 0, 1))
+        if not self.gameOver:
+            if self.isKingInCheck(WHITE):
+                for i, p in enumerate(self.pieces):
+                    if isinstance(p, King) and p.color == WHITE:
+                        self.squares[i].setColor((1, 0, 0, 1))
+            elif self.isKingInCheck(PIECEBLACK):
+                for i, p in enumerate(self.pieces):
+                    if isinstance(p, King) and p.color == PIECEBLACK:
+                        self.squares[i].setColor((1, 0, 0, 1))
 
     def switchTurn(self):
         """
@@ -1846,8 +1903,8 @@ class ChessGame(AppState):
             
         # Update move history frame position
         if hasattr(self, 'moveHistoryFrame'):
-            on_x = window_aspect - 0.25
-            off_x = window_aspect + 0.25
+            on_x = window_aspect - 0.34
+            off_x = window_aspect + 0.32
             is_animating = hasattr(self, 'drawerInterval') and self.drawerInterval.isPlaying()
             if not is_animating:
                 if getattr(self, 'historyDrawerOpen', False):
