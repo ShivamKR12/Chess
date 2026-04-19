@@ -107,6 +107,8 @@ class ChessGame(AppState):
         self.notifySound.setVolume(self.sfx_volume)
         self.promoteSound = self.app.loader.loadSfx("sounds/promote.mp3")
         self.promoteSound.setVolume(self.sfx_volume)
+        self.illegalSound = self.app.loader.loadSfx("sounds/illegal.mp3")
+        self.illegalSound.setVolume(self.sfx_volume)
 
         # Bind the escape key to prompt quit dialog
         self.accept('escape', self.showQuitDialog)
@@ -1598,6 +1600,8 @@ class ChessGame(AppState):
 
         # Clicked an empty square or enemy piece that is not a valid move
         if self.selectedSquare is not None:
+            self.setStatus("Invalid move")
+            self.illegalSound.play()
             if self.pieces[self.selectedSquare] and self.pieces[self.selectedSquare].obj:
                 self.pieces[self.selectedSquare].obj.setPos(SquarePos(self.selectedSquare))
             self.selectedSquare = None
@@ -1610,6 +1614,7 @@ class ChessGame(AppState):
         # Prevent direct king capture (legal move logic should avoid this scenario in real chess).
         if isinstance(self.pieces[to], King):
             self.setStatus("Illegal move: cannot capture king")
+            self.illegalSound.play()
             return False
 
         self.movePiece(fr, to)
@@ -1680,6 +1685,7 @@ class ChessGame(AppState):
 
         # Invalid drop - return piece to original position and clear selection
         self.setStatus("Invalid move")
+        self.illegalSound.play()
         piece.obj.setPos(SquarePos(self.dragging))
         self.selectedSquare = None
         self.dragging = False
