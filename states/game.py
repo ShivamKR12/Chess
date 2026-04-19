@@ -165,8 +165,6 @@ class ChessGame(AppState):
             self.squareRoot.removeNode()
         
         # Remove UI elements
-        if hasattr(self, 'statusFrame'):
-            self.statusFrame.destroy()
         if hasattr(self, 'statusLabel'):
             self.statusLabel.destroy()
         if hasattr(self, 'restartButton'):
@@ -175,15 +173,23 @@ class ChessGame(AppState):
             self.resignButton.destroy()
         if hasattr(self, 'undoButton'):
             self.undoButton.destroy()
+        if hasattr(self, 'saveButton'):
+            self.saveButton.destroy()
         if hasattr(self, 'quitButton'):
             self.quitButton.destroy()
+        if hasattr(self, 'statusFrame'):
+            self.statusFrame.destroy()
+
         if hasattr(self, 'quitDialog'):
             self.quitDialog.cleanup()
             del self.quitDialog
-        if hasattr(self, 'moveHistoryFrame'):
-            self.moveHistoryFrame.destroy()
         if hasattr(self, 'moveHistoryLabel'):
             self.moveHistoryLabel.destroy()
+        if hasattr(self, 'historyToggleButton'):
+            self.historyToggleButton.destroy()
+        if hasattr(self, 'moveHistoryFrame'):
+            self.moveHistoryFrame.destroy()
+
         if hasattr(self, 'turnText'):
             self.turnText.destroy()
         if hasattr(self, 'resignDialog'):
@@ -192,10 +198,6 @@ class ChessGame(AppState):
         if hasattr(self, 'promotionDialog'):
             self.promotionDialog.cleanup()
             del self.promotionDialog
-        if hasattr(self, 'saveButton'):
-            self.saveButton.destroy()
-        if hasattr(self, 'historyToggleButton'):
-            self.historyToggleButton.destroy()
         if hasattr(self, 'drawerInterval') and self.drawerInterval.isPlaying():
             self.drawerInterval.pause()
             del self.drawerInterval

@@ -1,4 +1,3 @@
-import json
 from direct.gui.DirectGui import (
     DirectFrame, DirectLabel, DirectButton, DirectSlider, DirectScrolledFrame
 )
@@ -108,7 +107,7 @@ class SettingsState(AppState):
         
         self.vars = {}  # Track UI values
         
-        DirectLabel(
+        self.sfx_label = DirectLabel(
             parent=self.tabs['audio'], 
             text="SFX Volume :", 
             text_scale=0.06, 
@@ -144,7 +143,7 @@ class SettingsState(AppState):
             command=self.test_sfx
         )
         
-        DirectLabel(
+        self.graphics_label = DirectLabel(
             parent=self.tabs['visual'], 
             text="Graphics :", 
             text_scale=0.06, 
@@ -180,7 +179,7 @@ class SettingsState(AppState):
             )
             self.graphics_buttons[level] = btn
             
-        DirectLabel(
+        self.fov_label = DirectLabel(
             parent=self.tabs['visual'], 
             text="Camera FOV :", 
             text_scale=0.06, 
@@ -212,7 +211,8 @@ class SettingsState(AppState):
             text_fg=(1, 1, 1, 1), 
             frameColor=(0.3, 0.4, 0.5, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04), 
-            pos=(-0.25, 0, -0.15), relief='raised',
+            pos=(-0.40, 0, -0.20), 
+            relief='raised',
             command=self.toggle_boolean, 
             extraArgs=['bloom', 'bloom_btn', 'Bloom']
         )
@@ -224,39 +224,26 @@ class SettingsState(AppState):
             text_fg=(1, 1, 1, 1), 
             frameColor=(0.3, 0.4, 0.5, 1),
             frameSize=(-0.2, 0.2, -0.04, 0.04), 
-            pos=(0.25, 0, -0.15), 
+            pos=(0, 0, -0.20), 
             relief='raised',
             command=self.toggle_boolean, 
             extraArgs=['blur', 'blur_btn', 'Blur']
         )
-        self.ao_btn = DirectButton(
+        self.hdr_btn = DirectButton(
             parent=self.tabs['visual'], 
-            text=f"Amb. Occlusion: {'ON' if self.settings_mgr.get('ambient_occlusion', False) else 'OFF'}",
+            text=f"HDR: {'ON' if self.settings_mgr.get('hdr', False) else 'OFF'}",
             text_pos=(0, -0.01),
             text_scale=0.05, 
             text_fg=(1, 1, 1, 1), 
             frameColor=(0.3, 0.4, 0.5, 1),
-            frameSize=(-0.25, 0.25, -0.04, 0.04), 
-            pos=(-0.25, 0, -0.25), 
+            frameSize=(-0.2, 0.2, -0.04, 0.04), 
+            pos=(0.40, 0, -0.20), 
             relief='raised',
             command=self.toggle_boolean, 
-            extraArgs=['ambient_occlusion', 'ao_btn', 'Amb. Occlusion']
-        )
-        self.edge_btn = DirectButton(
-            parent=self.tabs['visual'], 
-            text=f"Edge Highlight: {'ON' if self.settings_mgr.get('edge_highlight', False) else 'OFF'}",
-            text_pos=(0, -0.01),
-            text_scale=0.05, 
-            text_fg=(1, 1, 1, 1), 
-            frameColor=(0.3, 0.4, 0.5, 1),
-            frameSize=(-0.25, 0.25, -0.04, 0.04), 
-            pos=(0.25, 0, -0.25), 
-            relief='raised',
-            command=self.toggle_boolean, 
-            extraArgs=['edge_highlight', 'edge_btn', 'Edge Highlight']
+            extraArgs=['hdr', 'hdr_btn', 'HDR']
         )
 
-        DirectLabel(
+        self.difficulty_label = DirectLabel(
             parent=self.tabs['gameplay'], 
             text="AI Difficulty :", 
             text_scale=0.06, 
@@ -450,8 +437,7 @@ class SettingsState(AppState):
 
         self.bloom_btn['text'] = f"Bloom: {'ON' if self.settings_mgr.defaults.get('bloom') else 'OFF'}"
         self.blur_btn['text'] = f"Blur: {'ON' if self.settings_mgr.defaults.get('blur') else 'OFF'}"
-        self.ao_btn['text'] = f"Amb. Occlusion: {'ON' if self.settings_mgr.defaults.get('ambient_occlusion') else 'OFF'}"
-        self.edge_btn['text'] = f"Edge Highlight: {'ON' if self.settings_mgr.defaults.get('edge_highlight') else 'OFF'}"
+        self.hdr_btn['text'] = f"HDR: {'ON' if self.settings_mgr.defaults.get('hdr') else 'OFF'}"
 
         self.settings_mgr.save()
         self.settings_mgr.apply(self.app)
@@ -467,6 +453,11 @@ class SettingsState(AppState):
         # Explicitly destroy all direct GUI references to prevent memory leaks
         if hasattr(self, 'titleLabel'): self.titleLabel.destroy()
         
+        if hasattr(self, 'sfx_label'): self.sfx_label.destroy()
+        if hasattr(self, 'graphics_label'): self.graphics_label.destroy()
+        if hasattr(self, 'fov_label'): self.fov_label.destroy()
+        if hasattr(self, 'difficulty_label'): self.difficulty_label.destroy()
+        
         if hasattr(self, 'tab_audio'): self.tab_audio.destroy()
         if hasattr(self, 'tab_visual'): self.tab_visual.destroy()
         if hasattr(self, 'tab_gameplay'): self.tab_gameplay.destroy()
@@ -478,8 +469,7 @@ class SettingsState(AppState):
                 btn.destroy()
         if hasattr(self, 'bloom_btn'): self.bloom_btn.destroy()
         if hasattr(self, 'blur_btn'): self.blur_btn.destroy()
-        if hasattr(self, 'ao_btn'): self.ao_btn.destroy()
-        if hasattr(self, 'edge_btn'): self.edge_btn.destroy()
+        if hasattr(self, 'hdr_btn'): self.hdr_btn.destroy()
         if hasattr(self, 'theme_buttons'):
             for btn in self.theme_buttons.values():
                 btn.destroy()

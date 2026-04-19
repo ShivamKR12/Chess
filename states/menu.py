@@ -199,8 +199,6 @@ class MenuState(AppState):
     def cleanup(self):
         """Clean up menu UI elements."""
         super().cleanup()
-        if hasattr(self, 'menuFrame'):
-            self.menuFrame.destroy()
         if hasattr(self, 'titleLabel'):
             self.titleLabel.destroy()
         if hasattr(self, 'pvpButton'):
@@ -217,3 +215,5 @@ class MenuState(AppState):
             self.settingsButton.destroy()
         if hasattr(self, 'exitButton'):
             self.exitButton.destroy()
+        if hasattr(self, 'menuFrame'):
+            self.menuFrame.destroy()

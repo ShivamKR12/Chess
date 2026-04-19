@@ -23,8 +23,7 @@ class SettingsManager:
             'board_theme': 'classic',
             'bloom': False,
             'blur': False,
-            'ambient_occlusion': False,
-            'edge_highlight': False
+            'hdr': False
         }
         self.settings = self.load()
     
@@ -58,7 +57,7 @@ class SettingsManager:
         if app and app.sfxManagerList:
             app.sfxManagerList[0].setVolume(self.get('sfx_volume', 1.0))
         
-        # ( NOT FOR NOW ! ) # Graphics MSAA via PRC (runtime effect on new render targets)
+        # Graphics MSAA via PRC (runtime effect on new render targets)
         msaa_map = {'off': 0, 'low': 2, 'high': 4}
         msaa = msaa_map.get(self.get('graphics', 'high'), 4)
         loadPrcFileData('', f'framebuffer-multisample true\nmultisamples {msaa}\n')
@@ -82,11 +81,14 @@ class SettingsManager:
             if not hasattr(self, 'filters'):
                 self.filters = CommonFilters(app.win, app.cam)
             
-            # Clear existing
+            # Clear existing filters to prevent stacking when toggling options
             self.filters.delBloom()
             self.filters.delBlurSharpen()
-            self.filters.delAmbientOcclusion()
-            self.filters.delCartoonInk()
+            self.filters.delHighDynamicRange()
+            # Force a complete rebuild of the post-processing pipeline
+            # to avoid stacking custom passes and ensure clean state
+            self.filters.cleanup()
+            self.filters.configuration.clear()
             
             # Apply MSAA directly to the post-processing render buffer
             if msaa > 0:
@@ -95,10 +97,11 @@ class SettingsManager:
                 self.filters.delMSAA()
             
             if self.get('bloom', False):
-                self.filters.setBloom(blend=(0, 0, 0, 1), desat=-0.5, intensity=1.0, size="medium")
+                # Standard blend, triggering only on bright pixels (mintrigger=0.6), mild desaturation
+                self.filters.setBloom(blend=(0.3, 0.4, 0.3, 0.0), desat=0.5, intensity=0.8, mintrigger=0.6, maxtrigger=1.0, size="medium")
             if self.get('blur', False):
-                self.filters.setBlurSharpen(amount=0.5)
-            if self.get('ambient_occlusion', False):
-                self.filters.setAmbientOcclusion(numsamples=16, radius=0.05, amount=2.0, strength=0.01, falloff=0.000002)
-            if self.get('edge_highlight', False):
-                self.filters.setCartoonInk(separation=1)
+                # amount=1.0 is no effect. >1.0 sharpens. <1.0 blurs. 
+                # We use 1.2 to slightly sharpen the image rather than making the whole screen blurry.
+                self.filters.setBlurSharpen(amount=2.0)
+            if self.get('hdr', False):
+                self.filters.setHighDynamicRange()
