@@ -1352,137 +1352,77 @@ class ChessGame(AppState):
         else:
             self.moveSelfSound.play()
 
-    def isPathClear(self, fr, to):
-        """
-        Check if the path between two squares is clear of pieces.
-        """
-        dx = (to % 8) - (fr % 8)  # Horizontal distance
-        dy = (to // 8) - (fr // 8)  # Vertical distance
-
-        stepX = 0 if dx == 0 else int(dx / abs(dx))  # Step direction in X
-        stepY = 0 if dy == 0 else int(dy / abs(dy))  # Step direction in Y
-
-        x = fr % 8 + stepX  # Start checking from next square
-        y = fr // 8 + stepY
-
-        while (x, y) != (to % 8, to // 8):
-            # Check each square along the path
-            if self.pieces[y * 8 + x]:
-                # If there's a piece on this square, path is blocked
-                return False
-            x += stepX
-            y += stepY
-
-        # Path is clear
-        return True
-
     def isValidMove(self, fr, to):
         """
         Check if a move from one square to another is valid according to chess rules.
         """
         if fr == to:
-            # Can't move to the same square
             return False
 
         piece = self.pieces[fr]
-        target = self.pieces[to]
-
-        if target and target.color == piece.color:
-            # Can't capture own pieces
+        if not piece:
             return False
 
-        dx = (to % 8) - (fr % 8)  # Horizontal distance
-        dy = (to // 8) - (fr // 8)  # Vertical distance
-
-        # Pawn movement rules
-        if isinstance(piece, Pawn):
-            direction = 1 if piece.color == WHITE else -1  # Forward direction
-            startRow = 1 if piece.color == WHITE else 6    # Starting row
-
-            # Single square forward
-            if dx == 0 and dy == direction and target is None:
-                return True
-
-            # Double square forward from starting position
-            if dx == 0 and dy == 2 * direction and fr // 8 == startRow:
-                if target is None and self.isPathClear(fr, to):
-                    return True
-
-            # Diagonal capture
-            if abs(dx) == 1 and dy == direction and target:
-                return True
-
-            # En passant capture
-            if abs(dx) == 1 and dy == direction and to == self.enPassantSquare:
-                return True
-
-            return False
-
-        # Knight movement (L-shape)
-        if isinstance(piece, Knight):
-            return (abs(dx), abs(dy)) in [(1, 2), (2, 1)]
-
-        # King movement
-        if isinstance(piece, King):
-            # Normal king move (one square in any direction)
-            if abs(dx) <= 1 and abs(dy) <= 1:
-                return True
-
-            # Castling
-            if dy == 0 and abs(dx) == 2:
-                if piece.color == WHITE and not self.whiteKingMoved:
-                    if dx == 2 and not self.whiteRookMoved[1]:  # Kingside
-                        return self.isPathClear(fr, fr + 3)  # Check path to rook
-                    if dx == -2 and not self.whiteRookMoved[0]:  # Queenside
-                        return self.isPathClear(fr, fr - 4)
-                if piece.color == PIECEBLACK and not self.blackKingMoved:
-                    if dx == 2 and not self.blackRookMoved[1]:
-                        return self.isPathClear(fr, fr + 3)
-                    if dx == -2 and not self.blackRookMoved[0]:
-                        return self.isPathClear(fr, fr - 4)
-
-        # Rook movement (horizontal/vertical)
-        if isinstance(piece, Rook):
-            if dx == 0 or dy == 0:  # Same file or rank
-                return self.isPathClear(fr, to)
-
-        # Bishop movement (diagonal)
-        if isinstance(piece, Bishop):
-            if abs(dx) == abs(dy):  # Equal diagonal distance
-                return self.isPathClear(fr, to)
-
-        # Queen movement (rook + bishop)
-        if isinstance(piece, Queen):
-            if dx == 0 or dy == 0 or abs(dx) == abs(dy):
-                return self.isPathClear(fr, to)
-
-        return False  # Invalid move for this piece
+        state = {
+            'en_passant_square': self.enPassantSquare,
+            'white_king_moved': self.whiteKingMoved,
+            'black_king_moved': self.blackKingMoved,
+            'white_rook_moved': self.whiteRookMoved,
+            'black_rook_moved': self.blackRookMoved
+        }
+        
+        return to in piece.get_pseudo_legal_moves(self.pieces, fr, state)
 
     def getLegalMoves(self, square):
         """
         Get all legal moves for a piece, considering check.
         """
         piece = self.pieces[square]
+        if not piece:
+            return []
+            
+        state = {
+            'en_passant_square': self.enPassantSquare,
+            'white_king_moved': self.whiteKingMoved,
+            'black_king_moved': self.blackKingMoved,
+            'white_rook_moved': self.whiteRookMoved,
+            'black_rook_moved': self.blackRookMoved
+        }
+
+        pseudo_moves = piece.get_pseudo_legal_moves(self.pieces, square, state)
         moves = []
 
-        for i in range(64):
-            # Check each possible destination
-            if self.isValidMove(square, i):
-                # Simulate the move
-                captured = self.pieces[i]
-                self.pieces[i] = piece
-                self.pieces[square] = None
+        for to in pseudo_moves:
+            # Simulate the move
+            captured = self.pieces[to]
+            self.pieces[to] = piece
+            self.pieces[square] = None
 
-                # Check if this move would leave own king in check
-                kingCheck = self.isKingInCheck(piece.color)
+            # Check if this move would leave own king in check
+            kingCheck = self.isKingInCheck(piece.color)
 
-                # Revert the simulation
-                self.pieces[square] = piece
-                self.pieces[i] = captured
+            # Revert the simulation
+            self.pieces[square] = piece
+            self.pieces[to] = captured
 
-                # Move is legal if it doesn't leave king in check
-                if not kingCheck:
-                    moves.append(i)
+            # Move is legal if it doesn't leave king in check
+            if not kingCheck:
+                # Extra check for castling: can't castle out of or through check
+                if isinstance(piece, King) and abs((to % 8) - (square % 8)) == 2:
+                    if self.isKingInCheck(piece.color):
+                        continue
+                    
+                    pass_through_sq = square + (1 if to > square else -1)
+                    self.pieces[pass_through_sq] = piece
+                    self.pieces[square] = None
+                    passCheck = self.isKingInCheck(piece.color)
+                    self.pieces[square] = piece
+                    self.pieces[pass_through_sq] = None
+                    
+                    if passCheck:
+                        continue
+                        
+                moves.append(to)
 
         return moves
 
@@ -1504,11 +1444,19 @@ class ChessGame(AppState):
 
         self.checkedKingSquare = kingSquare
 
+        state = {
+            'en_passant_square': self.enPassantSquare,
+            'white_king_moved': self.whiteKingMoved,
+            'black_king_moved': self.blackKingMoved,
+            'white_rook_moved': self.whiteRookMoved,
+            'black_rook_moved': self.blackRookMoved
+        }
+
         # Check if any enemy piece can move to the king's square
         for i, p in enumerate(self.pieces):
             if p and p.color != color:
-                # If enemy piece can move to king's square, king is in check
-                if self.isValidMove(i, kingSquare):
+                # We only need pseudo-legal moves to see if the king is attacked
+                if kingSquare in p.get_pseudo_legal_moves(self.pieces, i, state):
                     return True
 
         self.checkedKingSquare = None
