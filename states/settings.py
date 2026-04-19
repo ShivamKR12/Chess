@@ -458,7 +458,6 @@ class SettingsState(AppState):
     
     def back_to_menu(self):
         self.settings_mgr.save()
-        self.cleanup()
         self.app.showMenu()
     
     def cleanup(self):

@@ -27,28 +27,28 @@ def evaluate_board(pieces):
                 score -= val
     return score
 
-def get_all_legal_moves(game, color):
+def get_all_legal_moves(logic, color):
     """Returns a list of tuples (from_sq, to_sq) of all legal moves for a given color."""
     moves = []
-    for square, piece in enumerate(game.pieces):
+    for square, piece in enumerate(logic.pieces):
         if piece and piece.color == color:
-            for dest in game.getLegalMoves(square):
+            for dest in logic.get_legal_moves(square):
                 moves.append((square, dest))
     return moves
 
-def minimax(game, depth, alpha, beta, maximizing_player):
+def minimax(logic, depth, alpha, beta, maximizing_player):
     """
     Recursive Minimax algorithm with Alpha-Beta pruning.
     """
     if depth == 0:
-        return evaluate_board(game.pieces)
+        return evaluate_board(logic.pieces)
         
     color = WHITE if maximizing_player else PIECEBLACK
-    moves = get_all_legal_moves(game, color)
+    moves = get_all_legal_moves(logic, color)
     
     # Terminal states (Checkmate or Stalemate)
     if not moves:
-        if game.isKingInCheck(color):
+        if logic.is_king_in_check(color):
             # Checkmate: returning a massive penalty/reward
             return -9999 if maximizing_player else 9999
         return 0  # Stalemate
@@ -57,16 +57,16 @@ def minimax(game, depth, alpha, beta, maximizing_player):
         max_eval = -float('inf')
         for fr, to in moves:
             # Simulate the move by temporarily swapping array elements
-            piece = game.pieces[fr]
-            captured = game.pieces[to]
-            game.pieces[to] = piece
-            game.pieces[fr] = None
+            piece = logic.pieces[fr]
+            captured = logic.pieces[to]
+            logic.pieces[to] = piece
+            logic.pieces[fr] = None
             
-            eval_score = minimax(game, depth - 1, alpha, beta, False)
+            eval_score = minimax(logic, depth - 1, alpha, beta, False)
             
             # Revert the simulation
-            game.pieces[fr] = piece
-            game.pieces[to] = captured
+            logic.pieces[fr] = piece
+            logic.pieces[to] = captured
             
             max_eval = max(max_eval, eval_score)
             alpha = max(alpha, eval_score)
@@ -76,15 +76,15 @@ def minimax(game, depth, alpha, beta, maximizing_player):
     else:
         min_eval = float('inf')
         for fr, to in moves:
-            piece = game.pieces[fr]
-            captured = game.pieces[to]
-            game.pieces[to] = piece
-            game.pieces[fr] = None
+            piece = logic.pieces[fr]
+            captured = logic.pieces[to]
+            logic.pieces[to] = piece
+            logic.pieces[fr] = None
             
-            eval_score = minimax(game, depth - 1, alpha, beta, True)
+            eval_score = minimax(logic, depth - 1, alpha, beta, True)
             
-            game.pieces[fr] = piece
-            game.pieces[to] = captured
+            logic.pieces[fr] = piece
+            logic.pieces[to] = captured
             
             min_eval = min(min_eval, eval_score)
             beta = min(beta, eval_score)
@@ -92,14 +92,14 @@ def minimax(game, depth, alpha, beta, maximizing_player):
                 break  # Alpha cutoff
         return min_eval
 
-def get_best_move(game, depth=2):
+def get_best_move(logic, depth=2):
     """
     Kickstarts the Minimax tree to find the best move for the current turn.
     """
-    maximizing = (game.turn == WHITE)
+    maximizing = (logic.turn == WHITE)
     best_move = None
     
-    moves = get_all_legal_moves(game, game.turn)
+    moves = get_all_legal_moves(logic, logic.turn)
     if not moves:
         return None
         
@@ -112,15 +112,15 @@ def get_best_move(game, depth=2):
     best_score = -float('inf') if maximizing else float('inf')
     
     for fr, to in moves:
-        piece = game.pieces[fr]
-        captured = game.pieces[to]
-        game.pieces[to] = piece
-        game.pieces[fr] = None
+        piece = logic.pieces[fr]
+        captured = logic.pieces[to]
+        logic.pieces[to] = piece
+        logic.pieces[fr] = None
         
-        score = minimax(game, depth - 1, alpha, beta, not maximizing)
+        score = minimax(logic, depth - 1, alpha, beta, not maximizing)
         
-        game.pieces[fr] = piece
-        game.pieces[to] = captured
+        logic.pieces[fr] = piece
+        logic.pieces[to] = captured
         
         if maximizing:
             if score > best_score:

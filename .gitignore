@@ -5,6 +5,7 @@ states/__pycache__/
 To-Be-Used-If-Needed/
 TODO.txt
 config.json
+mkdocs.yml
 saves/
 venv/
 docs/
