@@ -1,7 +1,13 @@
 name: Build and Release Chess Game
 
 on:
-  [push, workflow_dispatch]
+  push:
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - 'setup.py'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -10,7 +16,6 @@ jobs:
   build:
     name: Build Game
     runs-on: ubuntu-latest
-    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[ci skip]'))
 
     steps:
       - name: Checkout repository
@@ -55,3 +60,30 @@ jobs:
             Chess-Windows.zip
             Chess-Linux.zip
             Chess-macOS.zip
+
+      - name: Setup Butler
+        uses: remarkablegames/setup-butler@v1
+
+      - name: Publish Windows to itch.io via Butler
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          mkdir -p push_win
+          cp Chess-Windows.zip push_win/
+          butler push push_win shivamkr12/chess:windows --userversion v2.0.${{ github.run_number }}
+
+      - name: Publish Linux to itch.io via Butler
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          mkdir -p push_linux
+          cp Chess-Linux.zip push_linux/
+          butler push push_linux shivamkr12/chess:linux --userversion v2.0.${{ github.run_number }}
+
+      - name: Publish macOS to itch.io via Butler
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          mkdir -p push_mac
+          cp Chess-macOS.zip push_mac/
+          butler push push_mac shivamkr12/chess:mac --userversion v2.0.${{ github.run_number }}
